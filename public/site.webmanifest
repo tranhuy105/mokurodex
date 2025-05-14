@@ -1,6 +1,6 @@
 {
-  "name": "MokuReader",
-  "short_name": "MokuReader",
+  "name": "MokuroDex",
+  "short_name": "MokuroDex",
   "description": "Manga reader with Mokuro integration for japanese learning",
   "icons": [
     {

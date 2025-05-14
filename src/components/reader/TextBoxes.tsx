@@ -25,6 +25,8 @@ export default function TextBoxes({
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeBoxIndex, setActiveBoxIndex] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [isScaled, setIsScaled] = useState(false); // Track if scaling has completed
+  const scaleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Detect if on mobile device
   useEffect(() => {
@@ -106,21 +108,42 @@ export default function TextBoxes({
 
   // Set container scale to match image size when rendered
   useEffect(() => {
+    // Reset scaling state when dimensions change
+    setIsScaled(false);
+
+    // Clear any existing timeout
+    if (scaleTimeoutRef.current) {
+      clearTimeout(scaleTimeoutRef.current);
+      scaleTimeoutRef.current = null;
+    }
+
+    // Create a mounted ref to prevent state updates after unmount
+    const isMounted = { current: true };
+
     if (containerRef.current) {
       const container = containerRef.current;
       const parent = container.parentElement;
 
       if (parent) {
         // Debounce function to prevent rapid updates
-        let resizeTimeout: NodeJS.Timeout;
+        let resizeTimeout: NodeJS.Timeout | null = null;
 
         const updateScale = () => {
-          if (!containerRef.current || !parent) return;
+          if (!isMounted.current || !containerRef.current || !parent) return;
 
           // Get the actual rendered dimensions of the parent (the image container)
           const parentRect = parent.getBoundingClientRect();
           const parentWidth = parentRect.width;
           const parentHeight = parentRect.height;
+
+          // Bail early if parent has no width - means the element isn't fully rendered yet
+          if (parentWidth <= 1 || parentHeight <= 1) {
+            // Try again in a short while
+            if (isMounted.current) {
+              scaleTimeoutRef.current = setTimeout(updateScale, 50);
+            }
+            return;
+          }
 
           // Check if this is a wide/double page image
           const isWideImage = imgWidth > imgHeight * 1.5;
@@ -141,39 +164,81 @@ export default function TextBoxes({
           scale = Math.round(scale * 10000) / 10000;
 
           // Apply transform with hardware acceleration
-          container.style.transform = `scale(${scale})`;
-          container.style.transformOrigin = "top left";
-          container.style.willChange = "transform";
+          if (containerRef.current && isMounted.current) {
+            container.style.transform = `scale(${scale})`;
+            container.style.transformOrigin = "top left";
+            container.style.willChange = "transform";
+
+            // Mark scaling as complete after a small delay to ensure rendering completes
+            if (scaleTimeoutRef.current) {
+              clearTimeout(scaleTimeoutRef.current);
+            }
+
+            scaleTimeoutRef.current = setTimeout(() => {
+              if (isMounted.current) {
+                setIsScaled(true);
+              }
+            }, 100);
+          }
         };
 
         // Debounced resize handler
         const debouncedResize = () => {
-          clearTimeout(resizeTimeout);
+          if (!isMounted.current) return;
+
+          setIsScaled(false); // Reset scaling state during resize
+
+          if (resizeTimeout) {
+            clearTimeout(resizeTimeout);
+          }
+
           resizeTimeout = setTimeout(() => {
-            requestAnimationFrame(updateScale);
+            if (isMounted.current) {
+              requestAnimationFrame(updateScale);
+            }
           }, 100);
         };
 
-        // Initial update
-        updateScale();
+        // Initial update - wait a tiny bit to ensure parent has rendered
+        setTimeout(() => {
+          if (isMounted.current) {
+            updateScale();
+          }
+        }, 10);
 
         // Update on resize with debounce
         window.addEventListener("resize", debouncedResize);
 
         // Use ResizeObserver to detect changes in parent size
+        let resizeObserver: ResizeObserver | null = null;
+
         if (typeof ResizeObserver !== "undefined") {
-          const resizeObserver = new ResizeObserver(debouncedResize);
+          resizeObserver = new ResizeObserver(() => {
+            // Only trigger resize if component is still mounted
+            if (isMounted.current) {
+              debouncedResize();
+            }
+          });
+
           resizeObserver.observe(parent);
-          return () => {
-            clearTimeout(resizeTimeout);
-            window.removeEventListener("resize", debouncedResize);
-            resizeObserver.disconnect();
-          };
         }
 
         return () => {
-          clearTimeout(resizeTimeout);
+          isMounted.current = false;
+
+          if (resizeTimeout) {
+            clearTimeout(resizeTimeout);
+          }
+
+          if (scaleTimeoutRef.current) {
+            clearTimeout(scaleTimeoutRef.current);
+          }
+
           window.removeEventListener("resize", debouncedResize);
+
+          if (resizeObserver) {
+            resizeObserver.disconnect();
+          }
         };
       }
     }
@@ -187,7 +252,9 @@ export default function TextBoxes({
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 pointer-events-none"
+      className={`absolute inset-0 pointer-events-none transition-opacity duration-200 ${
+        isScaled ? "opacity-100" : "opacity-0"
+      }`}
       style={{ width: `${imgWidth}px`, height: `${imgHeight}px` }}
     >
       {sortedBlocks.map(
@@ -211,7 +278,6 @@ export default function TextBoxes({
                 padding: 0,
                 lineHeight: "1.1em",
                 zIndex: isActive ? 20 : 20,
-                // backgroundColor: "rgba(0, 0, 0, 0.5)",
               }}
               data-text={lines.join(" ")}
               data-box-id={index}

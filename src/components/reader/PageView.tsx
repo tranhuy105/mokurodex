@@ -135,7 +135,6 @@ const PageView = memo(function PageView({
   page,
   settings,
   pageNumber,
-  showPageNumber = false,
   manga,
   volumeId,
   onCropperStateChange,
@@ -431,8 +430,11 @@ const PageView = memo(function PageView({
         ) {
           // Use requestAnimationFrame to avoid rapid state changes
           requestAnimationFrame(() => {
-            setLastWidth(rect.width);
-            setLastHeight(rect.height);
+            // Check if component is still mounted and refs are valid
+            if (imageRef.current && mountedRef.current) {
+              setLastWidth(rect.width);
+              setLastHeight(rect.height);
+            }
           });
         }
       }
@@ -445,12 +447,17 @@ const PageView = memo(function PageView({
       resizeTimeout = setTimeout(handleResize, 100);
     };
 
-    // Use a single ResizeObserver
-    const resizeObserver = new ResizeObserver(() => {
-      debouncedResize();
-    });
+    // Use a single ResizeObserver with proper cleanup
+    let resizeObserver: ResizeObserver | null = null;
 
-    if (imageRef.current) {
+    if (typeof ResizeObserver !== "undefined" && imageRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        // Only process if component is still mounted
+        if (mountedRef.current) {
+          debouncedResize();
+        }
+      });
+
       resizeObserver.observe(imageRef.current);
     }
 
@@ -459,7 +466,9 @@ const PageView = memo(function PageView({
     return () => {
       clearTimeout(resizeTimeout);
       window.removeEventListener("resize", debouncedResize);
-      resizeObserver.disconnect();
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
     };
   }, [lastWidth, lastHeight]);
 
@@ -539,25 +548,6 @@ const PageView = memo(function PageView({
                 imgHeight={page.img_height}
               />
             )}
-
-            {/* Page number indicator - MangaDex style */}
-            {showPageNumber && (
-              <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs">
-                {pageNumber}
-              </div>
-            )}
-
-            {/* Mobile debug info - remove in production */}
-            {/* {process.env.NODE_ENV !== "production" && isMobile && (
-              <div className="absolute top-0 left-0 bg-black bg-opacity-70 text-white text-xs p-1 z-50">
-                <div>
-                  W: {page.img_width} × H: {page.img_height}
-                </div>
-                <div>
-                  Ratio: {(page.img_width / page.img_height).toFixed(2)}
-                </div>
-              </div>
-            )} */}
           </div>
         )}
 

@@ -72,7 +72,7 @@ export default function SettingsPage() {
       <div className="container mx-auto p-8">
         <PageHeader
           title="Application Settings"
-          subtitle="Customize MokuReader to your preferences"
+          subtitle="Customize MokuroDex to your preferences"
           className="mb-4"
         />
         <SettingsNav />
@@ -96,7 +96,7 @@ export default function SettingsPage() {
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-7xl">
       <PageHeader
         title="Application Settings"
-        subtitle="Customize MokuReader to your preferences"
+        subtitle="Customize MokuroDex to your preferences"
         className="mb-4"
       />
 
@@ -268,7 +268,7 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>Theme</CardTitle>
                 <CardDescription>
-                  Control the visual appearance of MokuReader
+                  Control the visual appearance of MokuroDex
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { MangaPage, Volume } from "@/types/manga";
 import { MangaService } from "@/lib/services";
@@ -36,6 +36,36 @@ export function useMangaReader({
   const [currentPages, setCurrentPages] = useState<MangaPage[]>(pages);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // Use a ref to track the last URL update to prevent redundant updates
+  const lastUrlUpdate = useRef<string>(
+    `/manga/${mangaId}/${volume.mokuroData.volume_uuid}/${initialPage}`
+  );
+  const isUrlUpdatePending = useRef<boolean>(false);
+
+  // Utility function to update the URL efficiently
+  const updateUrl = useCallback((path: string, replace: boolean = true) => {
+    // Skip if we're already updating or the URL is unchanged
+    if (isUrlUpdatePending.current || lastUrlUpdate.current === path) return;
+
+    try {
+      isUrlUpdatePending.current = true;
+      lastUrlUpdate.current = path;
+
+      if (replace) {
+        window.history.replaceState({ path }, "", path);
+      } else {
+        window.history.pushState({ path }, "", path);
+      }
+    } catch (error) {
+      console.error("Error updating URL:", error);
+    } finally {
+      // Allow new updates after a short delay to prevent rapid consecutive updates
+      setTimeout(() => {
+        isUrlUpdatePending.current = false;
+      }, 50);
+    }
+  }, []);
+
   // Navigate to a specific page in the current volume
   const navigateToPage = useCallback(
     (page: number) => {
@@ -52,16 +82,14 @@ export function useMangaReader({
         console.warn(`Page ${page} out of bounds, using ${validPage} instead`);
       }
 
+      // Update current page state (this will cause components to re-render)
       setCurrentPage(validPage);
 
       // Update URL without navigation
-      window.history.replaceState(
-        {},
-        "",
-        `/manga/${mangaId}/${currentVolume.mokuroData.volume_uuid}/${validPage}`
-      );
+      const newPath = `/manga/${mangaId}/${currentVolume.mokuroData.volume_uuid}/${validPage}`;
+      updateUrl(newPath);
     },
-    [currentPages, currentVolume.mokuroData.volume_uuid, mangaId]
+    [currentPages, currentVolume.mokuroData.volume_uuid, mangaId, updateUrl]
   );
 
   // Navigate to a specific volume
@@ -99,8 +127,10 @@ export function useMangaReader({
 
           setCurrentPages(newPages || []);
 
-          // Update URL
-          window.history.pushState({}, "", `/manga/${mangaId}/${volumeId}/1`);
+          // Update URL - use pushState instead of replaceState for volume changes
+          // since this is a navigation users might want to go back from
+          const newPath = `/manga/${mangaId}/${volumeId}/1`;
+          updateUrl(newPath, false);
         } else {
           // If not found in current data, navigate to the new volume page
           router.push(`/manga/${mangaId}/${volumeId}/1`);
@@ -111,19 +141,16 @@ export function useMangaReader({
         setIsLoading(false);
       }
     },
-    [currentVolume.mokuroData.volume_uuid, mangaId, router, volumes]
+    [currentVolume.mokuroData.volume_uuid, mangaId, router, volumes, updateUrl]
   );
 
   // Update URL when volume changes
   useEffect(() => {
     if (currentVolume !== volume) {
-      window.history.replaceState(
-        {},
-        "",
-        `/manga/${mangaId}/${currentVolume.mokuroData.volume_uuid}/1`
-      );
+      const newPath = `/manga/${mangaId}/${currentVolume.mokuroData.volume_uuid}/1`;
+      updateUrl(newPath);
     }
-  }, [currentVolume, mangaId, volume]);
+  }, [currentVolume, mangaId, volume, updateUrl]);
 
   return {
     currentPage,

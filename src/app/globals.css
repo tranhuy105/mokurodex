@@ -161,3 +161,50 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Prevent selection for page numbers and progress indicators */
+[data-noselect="true"] {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  pointer-events: none !important;
+}
+
+/* Fix for Yomichan and similar tools */
+[data-page-element="true"] [data-noselect="true"] {
+  position: absolute;
+  z-index: 100;
+}
+
+/* Style for manga text content to isolate it from other elements */
+.manga-text {
+  isolation: isolate;
+  display: inline-block;
+  contain: content;
+  position: relative;
+  z-index: 1;
+}
+
+/* Create separate stacking contexts for different element types */
+[data-textbox="true"] {
+  isolation: isolate;
+  z-index: 2;
+}
+
+/* Ensure text boxes are in a different stacking context from page numbers */
+[data-textcontent="true"] {
+  isolation: isolate;
+  contain: content;
+  position: relative;
+  z-index: 2;
+}
+
+/* Ensure page indicators don't get selected */
+svg text {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  pointer-events: none !important;
+}

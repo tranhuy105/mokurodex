@@ -3,13 +3,13 @@ import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "next-themes";
 import Providers from "@/context/Providers";
 import ServerInitializer from "@/components/ServerInitializer";
-import Navbar from "@/components/ui/Navbar";
+import NavbarWrapper from "@/components/ui/NavbarWrapper";
 
 // Remove direct import since we're using the component approach
 // import "../lib/server-init";
 
 export const metadata = {
-  title: "MokuReader",
+  title: "MokuroDex",
   description: "Manga reader with Mokuro integration for language learning",
   icons: {
     icon: [
@@ -38,7 +38,7 @@ export default function RootLayout({
           <Providers>
             {/* This component triggers server initialization */}
             <ServerInitializer />
-            <Navbar />
+            <NavbarWrapper />
             <main>{children}</main>
             <Toaster position="bottom-right" />
           </Providers>

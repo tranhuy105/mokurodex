@@ -1,5 +1,5 @@
 {
-  "name": "mokureader",
+  "name": "mokurodex",
   "version": "0.1.0",
   "description": "A self-hosted manga reader with mokuro integration for language learning in a LAN environment",
   "private": true,
@@ -25,7 +25,7 @@
     "date-fns": "^4.1.0",
     "idb": "^8.0.3",
     "lucide-react": "^0.509.0",
-    "mokureader": "file:",
+    "mokurodex": "file:",
     "nanoid": "^5.1.5",
     "next": "15.3.2",
     "next-reader": "file:",

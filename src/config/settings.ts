@@ -13,7 +13,7 @@ export interface AppConfig {
 
 // Hard-coded default config
 const defaultConfig: AppConfig = {
-  siteName: "MokuReader",
+  siteName: "MokuroDex",
   mangaDir: process.env.MANGA_DIR || "./public/MANGA",
   ankiConnectUrl: process.env.ANKI_CONNECT_URL || "http://localhost:8765",
   defaultReadingMode: "single",

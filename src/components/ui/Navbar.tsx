@@ -41,7 +41,7 @@ export default function Navbar() {
               <div className="h-9 w-9 rounded flex items-center justify-center shadow-sm">
                 <Image
                   src="/logo.png"
-                  alt="MokuReader"
+                  alt="MokuroDex"
                   className="h-9 w-9 mt-[2px] mr-[2px]"
                   width={36}
                   height={36}
@@ -49,7 +49,7 @@ export default function Navbar() {
                 />
               </div>
               <span className="ml-2 text-lg font-bold text-gray-900 dark:text-white">
-                MokuReader
+                MokuroDex
               </span>
             </Link>
 
