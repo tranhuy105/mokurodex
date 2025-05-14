@@ -127,7 +127,7 @@ export default function MangaReader({
           <Home size={18} />
         </Link>
         <Link
-          href={`/manga/${manga}`}
+          href={`/manga/${encodeURIComponent(manga)}`}
           className="flex items-center justify-center w-10 h-10 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full shadow-lg transition-all"
         >
           <List size={18} />

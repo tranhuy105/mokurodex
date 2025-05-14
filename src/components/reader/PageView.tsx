@@ -213,11 +213,35 @@ const PageView = memo(function PageView({
         // Extract the image path components
         const pathParts = page.img_path.split("/");
         if (pathParts.length >= 3) {
-          const [mangaName, volumeName, ...imageParts] = pathParts;
+          // We only need volumeName and imageName, first element (mangaName) is ignored
+          const [, volumeName, ...imageParts] = pathParts;
           const imageName = imageParts.join("/");
 
-          // Use direct URL to the image in public directory
-          const url = createMangaImageUrl(mangaName, volumeName, imageName);
+          // Create URL to the image
+          const url = createMangaImageUrl(manga, volumeName, imageName);
+
+          // Check if this is a webp file
+          const isWebP = url.toLowerCase().endsWith(".webp");
+
+          // Log information about the image being loaded
+          console.log(`Loading image: ${url}, WebP: ${isWebP}`);
+
+          // Test if browser supports webp
+          if (isWebP) {
+            const testWebP = (callback: (supported: boolean) => void) => {
+              const webP = new Image();
+              webP.onload = () => callback(true);
+              webP.onerror = () => callback(false);
+              webP.src =
+                "data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==";
+            };
+
+            testWebP((supported) => {
+              console.log(`WebP support: ${supported}`);
+              // Even if not supported, we'll try loading anyway as the browser may have polyfills
+            });
+          }
+
           setImageUrl(url);
         }
       } catch (error) {
@@ -225,8 +249,11 @@ const PageView = memo(function PageView({
         setImageError(true);
         setIsLoading(false);
       }
+    } else if (page.image) {
+      // If no manga/volumeId provided, use the default image URL from the page object
+      setImageUrl(page.image);
     }
-  }, [manga, volumeId, page.img_path]);
+  }, [manga, volumeId, page.img_path, page.image]);
 
   // Function to retry loading image on error
   const retryLoadImage = () => {
@@ -357,6 +384,7 @@ const PageView = memo(function PageView({
     }
   };
 
+  // Enhanced error handling for image loading
   // Preload the image
   useEffect(() => {
     // Cancel existing timeout if there is one
@@ -366,12 +394,6 @@ const PageView = memo(function PageView({
 
     const img = new Image();
     img.onload = handleImageLoad;
-    img.onerror = () => {
-      if (mountedRef.current) {
-        setIsLoading(false);
-        setImageError(true);
-      }
-    };
 
     // Add a timestamp to bypass browser cache if this is a retry
     const url = retryCount > 0 ? `${imageUrl}?t=${Date.now()}` : imageUrl;
@@ -394,7 +416,7 @@ const PageView = memo(function PageView({
       img.onload = null;
       img.onerror = null;
     };
-  }, [imageUrl, retryCount]);
+  }, [imageUrl, retryCount, pageNumber, isLoading]);
 
   // Handle image dimensions changes to update TextBoxes position
   useEffect(() => {
@@ -476,27 +498,37 @@ const PageView = memo(function PageView({
           >
             <div
               ref={imageRef}
-              className="select-none transition-opacity duration-300"
+              className="select-none transition-opacity duration-300 relative"
               style={{
-                backgroundImage: `url(${imageUrl})`,
-                backgroundSize: "contain",
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "center",
                 ...getOptimalDimensions(),
                 aspectRatio: `${page.img_width} / ${page.img_height}`,
-                filter: settings.invertColors ? "invert(1)" : "none",
                 backgroundColor: settings.darkMode ? "#000" : "#fff",
                 boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
                 userSelect: "none",
                 WebkitUserSelect: "none",
                 minHeight: isMobile ? "50px" : "auto", // Ensure a minimum height on mobile
-                transform: "translateZ(0)", // Hardware acceleration
-                willChange: "transform", // Hint for browser to optimize
-                imageRendering: "auto", // Improve image quality
-                transformStyle: "preserve-3d", // Prevent flickering
               }}
               onContextMenu={handleContextMenu}
-            />
+            >
+              {/* Use img element instead of background-image for better format support */}
+              <img
+                src={imageUrl}
+                alt={`Page ${pageNumber}`}
+                className="w-full h-full object-contain"
+                style={{
+                  filter: settings.invertColors ? "invert(1)" : "none",
+                  transform: "translateZ(0)", // Hardware acceleration
+                  willChange: "transform", // Hint for browser to optimize
+                  imageRendering: "auto", // Improve image quality
+                  transformStyle: "preserve-3d", // Prevent flickering
+                }}
+                onLoad={handleImageLoad}
+                onError={() => {
+                  console.error(`Image failed to load: ${imageUrl}`);
+                  // This will trigger the image error effect which has fallback handling
+                }}
+              />
+            </div>
 
             {/* TextBoxes overlay */}
             {settings.showTooltips !== false && (

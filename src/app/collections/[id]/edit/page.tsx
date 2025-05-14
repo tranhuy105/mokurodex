@@ -15,7 +15,8 @@ interface EditCollectionPageProps {
 export default async function EditCollectionPage({
   params,
 }: EditCollectionPageProps) {
-  const id = params.id;
+  const p = await Promise.resolve(params);
+  const id = p.id;
 
   // Fetch collection data
   const collection = await getCollection(id);
