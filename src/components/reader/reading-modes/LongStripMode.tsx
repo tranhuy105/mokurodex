@@ -216,7 +216,17 @@ const LongStripMode = ({
       const container = containerRef.current;
       const targetElement = pageElementsRef.current.get(pageNumber);
 
-      if (!container || !targetElement) return false;
+      if (!container) {
+        console.warn("Container ref not available for scrolling");
+        return false;
+      }
+
+      if (!targetElement) {
+        console.warn(`Target element for page ${pageNumber} not found in refs`);
+        // Update page state anyway to keep UI consistent
+        changePage(pageNumber, true);
+        return false;
+      }
 
       try {
         // Set flags to prevent page change during scroll
@@ -234,24 +244,25 @@ const LongStripMode = ({
           behavior,
         });
 
+        console.log(
+          `Scrolled to page ${pageNumber} at position ${targetPosition}`
+        );
         return true;
       } catch (error) {
         console.error("Error scrolling to page:", error);
         return false;
       } finally {
-        // Reset flags after scroll animation completes
-        setTimeout(
-          () => {
-            isManuallyScrolling.current = false;
-            isInitialized.current = true;
+        // Reset flags after scroll animation completes with appropriate timing
+        const delay = behavior === "smooth" ? 800 : 200;
+        setTimeout(() => {
+          isManuallyScrolling.current = false;
+          isInitialized.current = true;
 
-            // Update URL after manual scroll completes
-            if (onPageChange && pageNumber !== currentPage) {
-              onPageChange(pageNumber);
-            }
-          },
-          behavior === "smooth" ? 800 : 200
-        );
+          // Update URL after manual scroll completes
+          if (onPageChange && pageNumber !== currentPage) {
+            onPageChange(pageNumber);
+          }
+        }, delay);
       }
     },
     [changePage, currentPage, onPageChange]
@@ -292,15 +303,40 @@ const LongStripMode = ({
 
   // Handle prop updates to currentPage
   useEffect(() => {
-    // Only respond to external page changes after initialization
-    // and when different from our internal active page
-    if (!isInitialized.current || currentPage === activePageNumber) return;
+    // Only respond to external page changes when different from our internal active page
+    if (currentPage === activePageNumber) return;
 
-    // Only scroll for significant changes
+    // Always attempt to scroll when explicitly requested via props,
+    // even if initialization is not complete
     if (Math.abs(currentPage - activePageNumber) > 0) {
-      scrollToPage(currentPage, "smooth");
+      // First update our internal page tracking to prevent feedback loops
+      setActivePageNumber(currentPage);
+      activePageRef.current = currentPage;
+
+      // Use a small delay to ensure the DOM has updated with any newly rendered pages
+      setTimeout(() => {
+        // Try to scroll to the requested page
+        if (pageElementsRef.current.has(currentPage)) {
+          scrollToPage(currentPage, "auto");
+          isInitialized.current = true;
+        } else {
+          // If page element doesn't exist yet (might be outside render window),
+          // expand the visible range and try again
+          const newStartIdx = Math.max(0, currentPage - 5);
+          const newEndIdx = Math.min(pages.length, currentPage + 5);
+          setVisibleRange([newStartIdx, newEndIdx]);
+
+          // Try again after the range update
+          setTimeout(() => {
+            if (pageElementsRef.current.has(currentPage)) {
+              scrollToPage(currentPage, "auto");
+            }
+            isInitialized.current = true;
+          }, 50);
+        }
+      }, 50);
     }
-  }, [currentPage, activePageNumber, scrollToPage]);
+  }, [currentPage, activePageNumber, scrollToPage, pages.length]);
 
   // Render pages with efficient virtualization
   const renderedPages = useMemo(() => {

@@ -8,17 +8,23 @@ import {
   Book,
   Monitor,
   Pencil,
-  Trash,
   Loader2,
+  BookOpen,
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
-import { useAnkiCards } from "@/hooks/useAnkiCards";
-import { cleanCards, getLastCardId } from "@/lib/anki-connect";
 import { toast } from "react-hot-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Volume } from "@/types/manga";
 
 interface SettingsSidebarProps {
   onClose: () => void;
+  // Add props for volume navigation and page navigation
+  currentPage?: number;
+  totalPages?: number;
+  volumes?: Volume[];
+  currentVolume?: Volume;
+  onPageChange?: (page: number) => void;
+  onVolumeChange?: (volumeId: string) => void;
 }
 
 // Section header component with toggle functionality
@@ -80,13 +86,20 @@ function ModeButton({
   );
 }
 
-export default function SettingsSidebar({ onClose }: SettingsSidebarProps) {
+export default function SettingsSidebar({
+  onClose,
+  currentPage = 1,
+  totalPages = 0,
+  volumes = [],
+  currentVolume,
+  onPageChange,
+  onVolumeChange,
+}: SettingsSidebarProps) {
   const { isLoading, error, updateSettings, ...settings } = useSettings();
-  const ankiCards = useAnkiCards();
 
   // Track which sections are open
   const [openSections, setOpenSections] = useState({
-    ankiCleaning: true,
+    navigation: true,
     readingMode: true,
     appearance: true,
     anki: true,
@@ -95,49 +108,27 @@ export default function SettingsSidebar({ onClose }: SettingsSidebarProps) {
   // Add a loading state
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // State for page input
+  const [pageInput, setPageInput] = useState(currentPage.toString());
+
   // Update the handlers to check if we're on a manga reader page
   const isInReader =
     typeof window !== "undefined" &&
     !window.location.pathname.startsWith("/settings");
 
+  // Add a state to track the current loading operation type
+  const [loadingOperation, setLoadingOperation] = useState<
+    "settings" | "page" | "volume"
+  >("settings");
+
   const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
-  };
-
-  const handleAddLastCard = async () => {
-    try {
-      const lastId = await getLastCardId();
-      if (lastId) {
-        const numericId = parseInt(String(lastId), 10);
-        ankiCards.addCardToClean(numericId);
-        toast.success("Last card added to cleaning queue");
-      } else {
-        toast.error("No recent card found");
-      }
-    } catch (error) {
-      console.error("Error adding card to clean:", error);
-      toast.error("Failed to get last card");
-    }
-  };
-
-  const handleCleanCards = async () => {
-    if (ankiCards.cardsToClean.length === 0) {
-      toast.error("No cards to clean");
-      return;
-    }
-
-    try {
-      const cleanedIds = await cleanCards(ankiCards.cardsToClean);
-      cleanedIds.forEach((id) => ankiCards.removeCardFromClean(id));
-    } catch (error) {
-      console.error("Error during card cleaning:", error);
-      toast.error("Failed to clean cards");
-    }
   };
 
   const handleBooleanToggle = (key: string, value: boolean) => {
     // Only show loading when in reader (will cause reload)
     if (isInReader) {
+      setLoadingOperation("settings");
       setIsUpdating(true);
     }
     updateSettings({ [key]: value });
@@ -148,6 +139,7 @@ export default function SettingsSidebar({ onClose }: SettingsSidebarProps) {
   ) => {
     // Only show loading when in reader (will cause reload)
     if (isInReader) {
+      setLoadingOperation("settings");
       setIsUpdating(true);
     }
     updateSettings({ readingMode: mode });
@@ -156,10 +148,96 @@ export default function SettingsSidebar({ onClose }: SettingsSidebarProps) {
   const handleFontSizeChange = (fontSize: number | "auto") => {
     // Only show loading when in reader (will cause reload)
     if (isInReader) {
+      setLoadingOperation("settings");
       setIsUpdating(true);
     }
     updateSettings({ fontSize });
   };
+
+  // Handle page navigation
+  const handlePageChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onPageChange) return;
+
+    const newPage = parseInt(pageInput);
+    if (isNaN(newPage) || newPage < 1 || newPage > totalPages) {
+      toast.error(`Please enter a page number between 1 and ${totalPages}`);
+      setPageInput(currentPage.toString());
+      return;
+    }
+
+    // For long strip mode, show loading indicator immediately
+    if (settings.readingMode === "longStrip") {
+      setLoadingOperation("page");
+      setIsUpdating(true);
+    }
+
+    // Call the page change callback
+    onPageChange(newPage);
+
+    // For all modes, give some visual feedback
+    if (settings.readingMode === "longStrip") {
+      // Remove loading after a reasonable time
+      setTimeout(() => {
+        setIsUpdating(false);
+      }, 800); // Longer timeout to allow for page scrolling
+    }
+  };
+
+  // Helper function for page navigation with loading indicator
+  const navigateToPage = (newPage: number) => {
+    if (!onPageChange) return;
+
+    // For long strip mode, show loading indicator immediately
+    if (settings.readingMode === "longStrip") {
+      setLoadingOperation("page");
+      setIsUpdating(true);
+    }
+
+    // Call the page change callback
+    onPageChange(newPage);
+
+    // For long strip mode, give some visual feedback
+    if (settings.readingMode === "longStrip") {
+      // Remove loading after a reasonable time
+      setTimeout(() => {
+        setIsUpdating(false);
+      }, 800); // Longer timeout to allow for page scrolling
+    }
+  };
+
+  // Handle volume change
+  const handleVolumeChange = (volumeId: string) => {
+    if (!onVolumeChange || isUpdating) return;
+
+    // Show loading overlay immediately to block UI interaction
+    setLoadingOperation("volume");
+    setIsUpdating(true);
+
+    // Use setTimeout to ensure the loading indicator is visible before any potential errors occur
+    setTimeout(() => {
+      try {
+        // Call the volume change callback
+        onVolumeChange(volumeId);
+
+        // Keep loading state active during the page transition
+        // It will be cleared on the new page load
+      } catch (error) {
+        console.error("Error changing volume:", error);
+
+        // In case of error, remove loading state after a delay
+        setTimeout(() => {
+          setIsUpdating(false);
+          toast.error("Failed to switch volume. Please try again.");
+        }, 500);
+      }
+    }, 10);
+  };
+
+  // Update page input when currentPage changes
+  useEffect(() => {
+    setPageInput(currentPage.toString());
+  }, [currentPage]);
 
   // Display a loading state while settings are being fetched
   if (isLoading) {
@@ -177,7 +255,7 @@ export default function SettingsSidebar({ onClose }: SettingsSidebarProps) {
   if (error) {
     return (
       <div className="h-full w-80 bg-gray-800 text-white shadow-lg p-4">
-        <div className="sticky top-0 bg-gray-900 p-4 border-b border-gray-700 z-99999">
+        <div className="sticky top-0 bg-gray-900 p-4 border-b border-gray-700 z-99999 no-scrollbar">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold flex items-center gap-2">
               <SettingsIcon size={20} className="text-orange-400" />
@@ -208,7 +286,7 @@ export default function SettingsSidebar({ onClose }: SettingsSidebarProps) {
   }
 
   return (
-    <div className="h-full w-80 bg-gray-800 text-white shadow-lg overflow-y-auto">
+    <div className="h-full w-80 bg-gray-800 text-white shadow-lg overflow-y-auto no-scrollbar">
       <div className="sticky top-0 bg-gray-900 p-4 border-b border-gray-700 z-99999">
         <div className="flex justify-between items-center">
           <h3 className="text-xl font-semibold flex items-center gap-2">
@@ -227,58 +305,234 @@ export default function SettingsSidebar({ onClose }: SettingsSidebarProps) {
       </div>
 
       <div className="p-4 space-y-6">
-        {/* Anki Card Cleaning Section - Moved to top */}
+        {/* Navigation Section */}
         <div className="space-y-3">
           <SectionHeader
-            title="Card Cleaning"
-            icon={<Pencil size={18} className="text-orange-400" />}
-            isOpen={openSections.ankiCleaning}
-            onClick={() => toggleSection("ankiCleaning")}
+            title="Navigation"
+            icon={<BookOpen size={18} className="text-orange-400" />}
+            isOpen={openSections.navigation}
+            onClick={() => toggleSection("navigation")}
           />
 
-          {openSections.ankiCleaning && (
+          {openSections.navigation && (
             <div className="pt-2 space-y-4 pl-1">
+              {/* Page Navigation */}
               <div className="space-y-2">
-                <button
-                  className="w-full text-left px-3 py-2 rounded bg-orange-600 hover:bg-orange-700 text-sm flex items-center gap-2 transition-colors"
-                  onClick={handleAddLastCard}
-                >
-                  <Pencil size={16} />
-                  Add Last Card to Clean
-                </button>
+                <div className="text-sm font-medium mb-1">Page Navigation</div>
+                <div className="bg-gray-700 rounded-md p-2 border border-gray-600">
+                  <div className="flex items-center justify-between mb-3">
+                    <button
+                      onClick={() => {
+                        if (!onPageChange) return;
+                        const newPage = Math.max(1, currentPage - 1);
+                        navigateToPage(newPage);
+                      }}
+                      disabled={currentPage <= 1}
+                      className="w-8 h-8 flex items-center justify-center text-gray-300 bg-gray-800 hover:bg-gray-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                      aria-label="Previous page"
+                    >
+                      <ChevronDown className="w-4 h-4 transform rotate-90" />
+                    </button>
 
-                <button
-                  className={`w-full text-left px-3 py-2 rounded text-sm flex items-center gap-2 transition-colors ${
-                    ankiCards.cardsToClean.length === 0
-                      ? "bg-gray-700 text-gray-400 cursor-not-allowed"
-                      : "bg-green-600 hover:bg-green-700"
-                  }`}
-                  onClick={handleCleanCards}
-                  disabled={ankiCards.cardsToClean.length === 0}
-                >
-                  <Pencil size={16} />
-                  Clean {ankiCards.cardsToClean.length} Card(s)
-                </button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">
+                        {currentPage} / {totalPages}
+                      </span>
+                    </div>
 
-                <button
-                  className={`w-full text-left px-3 py-2 rounded text-sm flex items-center gap-2 transition-colors ${
-                    ankiCards.cardsToClean.length === 0
-                      ? "bg-gray-700 text-gray-400 cursor-not-allowed"
-                      : "bg-red-600 hover:bg-red-700"
-                  }`}
-                  onClick={ankiCards.clearCardsToClean}
-                  disabled={ankiCards.cardsToClean.length === 0}
-                >
-                  <Trash size={16} />
-                  Clear Cleaning Queue
-                </button>
+                    <button
+                      onClick={() => {
+                        if (!onPageChange) return;
+                        const newPage = Math.min(totalPages, currentPage + 1);
+                        navigateToPage(newPage);
+                      }}
+                      disabled={currentPage >= totalPages}
+                      className="w-8 h-8 flex items-center justify-center text-gray-300 bg-gray-800 hover:bg-gray-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                      aria-label="Next page"
+                    >
+                      <ChevronDown className="w-4 h-4 transform -rotate-90" />
+                    </button>
+                  </div>
+
+                  <form
+                    onSubmit={handlePageChange}
+                    className="flex gap-2 items-center"
+                  >
+                    <input
+                      type="number"
+                      value={pageInput}
+                      onChange={(e) => setPageInput(e.target.value)}
+                      min={1}
+                      max={totalPages}
+                      className="bg-gray-800 text-white rounded-md px-2 py-1 text-sm flex-1 h-8 border border-gray-600 focus:border-orange-500 focus:outline-none"
+                      aria-label="Go to page"
+                    />
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      size="sm"
+                      className="bg-orange-600 hover:bg-orange-700 text-white h-8"
+                    >
+                      Go
+                    </Button>
+                  </form>
+                </div>
               </div>
 
-              {ankiCards.cardsToClean.length > 0 && (
-                <div className="p-2 bg-gray-700 rounded-md">
-                  <p className="text-xs">
-                    {ankiCards.cardsToClean.length} card(s) queued for cleaning
-                  </p>
+              {/* Volume Selection */}
+              {volumes.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium mb-1">Volume</div>
+                  <div className="bg-gray-700 rounded-md p-2 border border-gray-600">
+                    <div className="flex items-center justify-between mb-2">
+                      <button
+                        onClick={() => {
+                          if (!currentVolume || volumes.length <= 1) return;
+                          const currentIndex = volumes.findIndex(
+                            (vol) =>
+                              vol.mokuroData.volume_uuid ===
+                              currentVolume.mokuroData.volume_uuid
+                          );
+                          if (currentIndex > 0) {
+                            handleVolumeChange(
+                              volumes[currentIndex - 1].mokuroData.volume_uuid
+                            );
+                          }
+                        }}
+                        disabled={
+                          !currentVolume ||
+                          volumes.findIndex(
+                            (vol) =>
+                              vol.mokuroData.volume_uuid ===
+                              currentVolume.mokuroData.volume_uuid
+                          ) <= 0
+                        }
+                        className="w-8 h-8 flex items-center justify-center text-gray-300 bg-gray-800 hover:bg-gray-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-label="Previous volume"
+                      >
+                        <ChevronDown className="w-4 h-4 transform rotate-90" />
+                      </button>
+
+                      <div className="relative flex-1 mx-2">
+                        <select
+                          value={currentVolume?.mokuroData.volume_uuid}
+                          onChange={(e) => handleVolumeChange(e.target.value)}
+                          className="w-full bg-gray-800 text-white rounded-md px-2 py-1 text-sm h-8 border border-gray-600 focus:border-orange-500 focus:outline-none appearance-none"
+                        >
+                          {volumes.map((vol) => (
+                            <option
+                              key={vol.mokuroData.volume_uuid}
+                              value={vol.mokuroData.volume_uuid}
+                            >
+                              {vol.mokuroData.volume ||
+                                `Volume ${vol.mokuroData.volume_uuid}`}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          if (!currentVolume || volumes.length <= 1) return;
+                          const currentIndex = volumes.findIndex(
+                            (vol) =>
+                              vol.mokuroData.volume_uuid ===
+                              currentVolume.mokuroData.volume_uuid
+                          );
+                          if (currentIndex < volumes.length - 1) {
+                            handleVolumeChange(
+                              volumes[currentIndex + 1].mokuroData.volume_uuid
+                            );
+                          }
+                        }}
+                        disabled={
+                          !currentVolume ||
+                          volumes.findIndex(
+                            (vol) =>
+                              vol.mokuroData.volume_uuid ===
+                              currentVolume.mokuroData.volume_uuid
+                          ) >=
+                            volumes.length - 1
+                        }
+                        className="w-8 h-8 flex items-center justify-center text-gray-300 bg-gray-800 hover:bg-gray-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-label="Next volume"
+                      >
+                        <ChevronDown className="w-4 h-4 transform -rotate-90" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Actions */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium mb-1">Quick Actions</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    className="bg-gray-700 hover:bg-gray-600 border border-gray-600 text-sm"
+                    onClick={() => {
+                      if (!onPageChange) return;
+                      navigateToPage(1);
+                    }}
+                    size="sm"
+                  >
+                    First Page
+                  </Button>
+
+                  <Button
+                    className="bg-gray-700 hover:bg-gray-600 border border-gray-600 text-sm"
+                    onClick={() => {
+                      if (!onPageChange) return;
+                      navigateToPage(totalPages);
+                    }}
+                    size="sm"
+                  >
+                    Last Page
+                  </Button>
+                </div>
+              </div>
+
+              {/* Uploader Information */}
+              {currentVolume && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium mb-1">Uploaded By</div>
+                  <div className="bg-gray-700 rounded-md p-2 border border-gray-600 space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="w-5 h-5 flex items-center justify-center text-gray-400">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="w-4 h-4"
+                        >
+                          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                      </span>
+                      <span className="flex-1">TeruTeruScans</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="w-5 h-5 flex items-center justify-center text-gray-400">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="w-4 h-4"
+                        >
+                          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                      </span>
+                      <span className="flex-1 text-blue-400">GalladeGuy</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -463,15 +717,21 @@ export default function SettingsSidebar({ onClose }: SettingsSidebarProps) {
         </div>
       </div>
 
-      {isUpdating && isInReader && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[99999]">
+      {isUpdating && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[99999]">
           <div className="bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm text-center">
             <Loader2 className="mx-auto h-10 w-10 animate-spin text-orange-400 mb-4" />
             <p className="text-lg font-medium text-white">
-              Applying settings...
+              {loadingOperation === "volume"
+                ? "Changing Volume..."
+                : loadingOperation === "page"
+                ? "Changing Page..."
+                : "Applying Settings..."}
             </p>
             <p className="text-sm text-gray-300 mt-2">
-              Page will reload to update the reader
+              {loadingOperation === "volume"
+                ? "Please wait while the reader reloads"
+                : "Please wait while the reader updates"}
             </p>
           </div>
         </div>

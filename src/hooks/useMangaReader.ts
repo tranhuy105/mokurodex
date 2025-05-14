@@ -99,46 +99,63 @@ export function useMangaReader({
       if (volumeId === currentVolume.mokuroData.volume_uuid) return;
 
       try {
+        // Set loading state immediately to prevent UI flicker
         setIsLoading(true);
 
+        // For reliable volume switching, especially in long strip mode,
+        // use a full page navigation for all manga pages
+        if (window.location.pathname.includes("/manga/")) {
+          // Use setTimeout to ensure the loading state is applied before navigating
+          setTimeout(() => {
+            window.location.href = `/manga/${mangaId}/${volumeId}/1`;
+          }, 10);
+          return;
+        }
+
+        // Only continue with client-side state update if we're not in the manga reader
+        // (e.g., if we're in settings or another page that shows manga volumes)
+        
         // Find the new volume from the volumes array
         const newVolume = volumes.find(
           (v) => v.mokuroData.volume_uuid === volumeId
         );
 
-        if (newVolume) {
-          // Update current volume
-          setCurrentVolume(newVolume);
-          setCurrentPage(1);
-
-          // Get pages for the new volume
-          const newPages = await MangaService.getVolumePages(
-            mangaId,
-            newVolume
-          );
-
-          // Safety check that pages were loaded
-          if (!newPages || newPages.length === 0) {
-            console.error(
-              "No pages loaded for volume:",
-              newVolume.mokuroData.volume
-            );
-          }
-
-          setCurrentPages(newPages || []);
-
-          // Update URL - use pushState instead of replaceState for volume changes
-          // since this is a navigation users might want to go back from
-          const newPath = `/manga/${mangaId}/${volumeId}/1`;
-          updateUrl(newPath, false);
-        } else {
-          // If not found in current data, navigate to the new volume page
+        if (!newVolume) {
+          console.error(`Volume with ID ${volumeId} not found`);
           router.push(`/manga/${mangaId}/${volumeId}/1`);
+          return;
         }
+
+        // Get pages for the new volume before updating state
+        const newPages = MangaService.getVolumePages(mangaId, newVolume);
+
+        // Safety check that pages were loaded
+        if (!newPages || newPages.length === 0) {
+          console.error(
+            "No pages loaded for volume:",
+            newVolume.mokuroData.volume
+          );
+          router.push(`/manga/${mangaId}/${volumeId}/1`);
+          return;
+        }
+
+        // Now that we have the pages, update the state
+        setCurrentVolume(newVolume);
+        setCurrentPages(newPages);
+        setCurrentPage(1);
+
+        // Update URL using pushState for non-reader pages
+        const newPath = `/manga/${mangaId}/${volumeId}/1`;
+        updateUrl(newPath, false);
       } catch (error) {
         console.error("Error navigating to volume:", error);
+        // Handle fatal errors by doing a full page reload
+        router.push(`/manga/${mangaId}/${volumeId}/1`);
       } finally {
-        setIsLoading(false);
+        // If we haven't already triggered a navigation, clear loading state
+        if (!window.location.pathname.includes("/manga/")) {
+          setIsLoading(false);
+        }
       }
     },
     [currentVolume.mokuroData.volume_uuid, mangaId, router, volumes, updateUrl]

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import { ChevronUp, Settings2, Home, List, BookOpen } from "lucide-react";
+import { useMemo } from "react";
+import { ChevronUp, Settings2, Home, List } from "lucide-react";
 import SettingsSidebar from "./SettingsSidebar";
 import { useSettings, useMangaReader, useReaderControls } from "@/hooks";
 import { MangaPage, Volume } from "@/types/manga";
@@ -36,6 +36,7 @@ export default function MangaReader({
     currentPages,
     isLoading,
     navigateToPage,
+    navigateToVolume,
   } = useMangaReader({
     mangaId: manga,
     volume,
@@ -52,18 +53,6 @@ export default function MangaReader({
     containerRef,
   } = useReaderControls();
 
-  // Added states for volume navigation UI
-  const [showVolumeSelector, setShowVolumeSelector] = useState(false);
-
-  const navigateToVolume = (volumeUuid: string) => {
-    if (volumeUuid !== currentVolume.mokuroData.volume_uuid) {
-      window.location.href = `/manga/${encodeURIComponent(
-        manga
-      )}/${encodeURIComponent(volumeUuid)}/1`;
-    }
-    setShowVolumeSelector(false);
-  };
-
   // Calculate actual page count to use when pages is empty
   const actualPageCount = useMemo(() => {
     return currentPages.length || currentVolume.metadata?.pageCount || 0;
@@ -79,25 +68,6 @@ export default function MangaReader({
       behavior: "smooth",
     });
   };
-
-  // Close volume selector when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        showVolumeSelector &&
-        !target.closest(".volume-selector") &&
-        !target.closest(".volume-button")
-      ) {
-        setShowVolumeSelector(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [showVolumeSelector]);
 
   // Render the appropriate content based on reading mode
   const renderContent = () => {
@@ -136,7 +106,15 @@ export default function MangaReader({
       {/* Fixed sidebar - outside of the main content flow */}
       {showSidebar && (
         <div className="fixed top-0 right-0 h-full z-[1000]">
-          <SettingsSidebar onClose={toggleSidebar} />
+          <SettingsSidebar
+            onClose={toggleSidebar}
+            currentPage={currentPage}
+            totalPages={actualPageCount}
+            volumes={volumes}
+            currentVolume={currentVolume}
+            onPageChange={navigateToPage}
+            onVolumeChange={navigateToVolume}
+          />
         </div>
       )}
 
@@ -149,7 +127,7 @@ export default function MangaReader({
         <Settings2 size={22} />
       </button>
 
-      {/* Navigation buttons - New layout with manga/volume controls */}
+      {/* Navigation buttons - Simple home/manga list navigation */}
       <div
         className={`fixed top-4 left-0 right-0 z-20 transition-opacity duration-300 flex justify-between items-center px-4 ${
           showControls ? "opacity-100" : "opacity-0"
@@ -169,54 +147,6 @@ export default function MangaReader({
           >
             <List size={18} />
           </Link>
-        </div>
-
-        {/* Volume navigation */}
-        <div className="flex items-center space-x-2">
-          <div className="relative volume-selector-container">
-            <button
-              onClick={() => setShowVolumeSelector(!showVolumeSelector)}
-              className="flex items-center justify-center px-4 py-2 bg-gray-800 bg-opacity-80 hover:bg-opacity-90 text-white rounded-lg shadow-lg transition-all volume-button"
-              aria-label="Select volume"
-            >
-              <BookOpen size={16} className="mr-2" />
-              <span className="text-sm font-medium mr-1 max-w-[100px] truncate">
-                {currentVolume.mokuroData.volume ||
-                  `Volume ${currentVolume.mokuroData.volume_uuid}`}
-              </span>
-              <ChevronDown
-                size={14}
-                className={`transform transition-transform ${
-                  showVolumeSelector ? "rotate-180" : ""
-                }`}
-              />
-            </button>
-
-            {/* Volume dropdown */}
-            {showVolumeSelector && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 bg-opacity-95 border border-gray-700 rounded-lg shadow-lg overflow-y-auto max-h-60 volume-selector z-[1001]">
-                <div className="py-1">
-                  {volumes.map((vol) => (
-                    <button
-                      key={vol.mokuroData.volume_uuid}
-                      onClick={() =>
-                        navigateToVolume(vol.mokuroData.volume_uuid)
-                      }
-                      className={`w-full text-left px-4 py-2 text-sm ${
-                        vol.mokuroData.volume_uuid ===
-                        currentVolume.mokuroData.volume_uuid
-                          ? "bg-orange-500 text-white"
-                          : "text-white hover:bg-gray-700"
-                      }`}
-                    >
-                      {vol.mokuroData.volume ||
-                        `Volume ${vol.mokuroData.volume_uuid}`}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -251,25 +181,5 @@ export default function MangaReader({
         </button>
       )}
     </div>
-  );
-}
-
-// ChevronDown component
-function ChevronDown(props: { size: number; className: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={props.size}
-      height={props.size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={props.className}
-    >
-      <polyline points="6 9 12 15 18 9"></polyline>
-    </svg>
   );
 }
