@@ -1,0 +1,89 @@
+import { NextResponse } from "next/server";
+import { getRepository } from "@/lib/database/MangaRepositoryFactory";
+import { Tag, Collection } from "@/lib/database/DatabaseInterface";
+
+export async function GET() {
+  try {
+    const repository = await getRepository();
+
+    // Create genre tags
+    const genreTags: Omit<Tag, "id">[] = [
+      { name: "Action", color: "red", type: "genre" as const },
+      { name: "Adventure", color: "blue", type: "genre" as const },
+      { name: "Comedy", color: "yellow", type: "genre" as const },
+      { name: "Drama", color: "purple", type: "genre" as const },
+      { name: "Fantasy", color: "indigo", type: "genre" as const },
+      { name: "Horror", color: "gray", type: "genre" as const },
+      { name: "Mystery", color: "green", type: "genre" as const },
+      { name: "Romance", color: "pink", type: "genre" as const },
+      { name: "Sci-Fi", color: "blue", type: "genre" as const },
+      { name: "Slice of Life", color: "green", type: "genre" as const },
+      { name: "Sports", color: "orange", type: "genre" as const },
+      { name: "Supernatural", color: "purple", type: "genre" as const },
+      { name: "Thriller", color: "red", type: "genre" as const },
+    ];
+
+    // Create content tags
+    const contentTags: Omit<Tag, "id">[] = [
+      { name: "School Setting", color: "blue", type: "content" as const },
+      { name: "Time Travel", color: "purple", type: "content" as const },
+      { name: "Isekai", color: "indigo", type: "content" as const },
+      { name: "Magic", color: "purple", type: "content" as const },
+      { name: "Military", color: "gray", type: "content" as const },
+      { name: "Cooking", color: "yellow", type: "content" as const },
+      { name: "Music", color: "pink", type: "content" as const },
+      { name: "Art", color: "orange", type: "content" as const },
+      { name: "Martial Arts", color: "red", type: "content" as const },
+      { name: "Mecha", color: "gray", type: "content" as const },
+      { name: "Superpower", color: "blue", type: "content" as const },
+      { name: "Psychological", color: "purple", type: "content" as const },
+    ];
+
+    // Create some collections
+    const collections: Omit<Collection, "id" | "createdAt" | "updatedAt">[] = [
+      {
+        name: "Currently Reading",
+        description: "Manga I'm actively reading now",
+        mangaIds: [],
+      },
+      {
+        name: "Favorites",
+        description: "My all-time favorite manga",
+        mangaIds: [],
+      },
+      {
+        name: "To Read Next",
+        description: "Manga I plan to read soon",
+        mangaIds: [],
+      },
+    ];
+
+    // Insert data
+    const createdGenreTags = await Promise.all(
+      genreTags.map((tag) => repository.createTag(tag))
+    );
+
+    const createdContentTags = await Promise.all(
+      contentTags.map((tag) => repository.createTag(tag))
+    );
+
+    const createdCollections = await Promise.all(
+      collections.map((collection) => repository.createCollection(collection))
+    );
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        genreTags: createdGenreTags.length,
+        contentTags: createdContentTags.length,
+        collections: createdCollections.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error seeding database:", error);
+    return NextResponse.json(
+      { success: false, error: String(error) },
+      { status: 500 }
+    );
+  }
+}
