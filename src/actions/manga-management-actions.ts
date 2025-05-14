@@ -262,6 +262,41 @@ export async function getReadingHistory(
   }
 }
 
+/**
+ * Get the most recent reading history entry for a specific volume
+ */
+export async function getLastReadPageForVolume(
+  mangaId: string,
+  volumeUuid: string
+): Promise<ReadingHistoryEntry | null> {
+  try {
+    const repository = await getRepository();
+    const allHistory = await repository.getReadingHistory(mangaId);
+    
+    // Find entries for this specific volume - now using volumeUuid directly
+    const volumeEntries = allHistory.filter(
+      entry => entry.volumeId === volumeUuid
+    );
+    
+    // Sort by timestamp (most recent first) and return the first entry if it exists
+    if (volumeEntries.length > 0) {
+      volumeEntries.sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      
+      return volumeEntries[0];
+    }
+    
+    return null;
+  } catch (error) {
+    console.error(
+      `Error in getLastReadPageForVolume for manga ${mangaId}, volume ${volumeUuid}:`,
+      error
+    );
+    return null;
+  }
+}
+
 // ========== Combined operations ==========
 
 /**

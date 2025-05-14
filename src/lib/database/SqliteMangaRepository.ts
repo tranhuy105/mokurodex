@@ -146,6 +146,53 @@ interface MangaWithUserDataRow extends MangaEntityRow {
 let db: Database.Database | null = null;
 
 /**
+ * Ensure consistent database schema between versions
+ * This function runs after initializeDatabase to perform any necessary migrations
+ */
+function migrateDatabase(database: Database.Database) {
+  try {
+    // For this migration we'll only log, as we're expecting a full rescan
+    console.log("Database schema updated: volumeUuid is now used as the primary key for volumes.");
+    console.log("You should rescan your manga collection for all changes to take effect.");
+    
+    // // Check if we have any data to migrate
+    // const volumeCount = database.prepare("SELECT COUNT(*) as count FROM volumes").get() as { count: number };
+    // if (volumeCount.count > 0) {
+    //   console.log(`Found ${volumeCount.count} volumes in the database that may need migration.`);
+    // }
+    
+    // // Check if the autoSavePosition column exists in the settings table
+    // const settingsColumns = database
+    //   .prepare("PRAGMA table_info(settings)")
+    //   .all() as { name: string }[];
+    
+    // const hasAutoSavePositionColumn = settingsColumns.some((col) => col.name === "autoSavePosition");
+    
+    // if (!hasAutoSavePositionColumn) {
+    //   console.log("Adding autoSavePosition column to settings table");
+    //   // Add the column with default value of 1 (true)
+    //   database.exec(`
+    //     ALTER TABLE settings ADD COLUMN autoSavePosition INTEGER NOT NULL DEFAULT 1;
+    //   `);
+    //   console.log("autoSavePosition column added successfully");
+    // }
+    
+    // If we wanted to migrate data instead of rescanning, we would do something like:
+    // database.exec(`
+    //   -- Create a backup of the reading_history table
+    //   CREATE TABLE IF NOT EXISTS reading_history_backup AS SELECT * FROM reading_history;
+    //   
+    //   -- Update reading_history to use volumeUuid instead of id
+    //   DELETE FROM reading_history;
+    // `);
+    // 
+    // -- Then we would need to reinsert data with corrected IDs
+  } catch (error) {
+    console.error("Error during database migration:", error);
+  }
+}
+
+/**
  * Get the database connection, initializing it if necessary
  * This is not exported so it can't be called directly as a server action
  */
@@ -154,6 +201,7 @@ function getDb(): Database.Database {
     try {
       db = new Database(DB_PATH, { verbose: console.log });
       initializeDatabase(db);
+      migrateDatabase(db);
     } catch (error) {
       console.error(`Error initializing database at ${DB_PATH}:`, error);
       throw error;
@@ -184,7 +232,7 @@ function initializeDatabase(database: Database.Database) {
     
     -- Volumes table (stores volume information for manga)
     CREATE TABLE IF NOT EXISTS volumes (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY, -- This is now the volumeUuid from Mokuro
       mangaId TEXT NOT NULL,
       volumeNumber INTEGER NOT NULL,
       volumeTitle TEXT NOT NULL,
@@ -193,7 +241,7 @@ function initializeDatabase(database: Database.Database) {
       pageCount INTEGER NOT NULL DEFAULT 0,
       addedDate TEXT NOT NULL,
       lastModified TEXT NOT NULL,
-      volumeUuid TEXT NOT NULL,
+      volumeUuid TEXT NOT NULL, -- Kept for backwards compatibility
       previewImages TEXT,
       FOREIGN KEY (mangaId) REFERENCES manga(id) ON DELETE CASCADE
     );
@@ -850,6 +898,8 @@ export async function addReadingHistoryEntry(
   const id = nanoid();
   const timestamp = new Date().toISOString();
 
+  // With our schema changes, the volumeId is now directly used
+  // No need for conversion between UUID and internal ID
   database
     .prepare(
       "INSERT INTO reading_history (id, mangaId, volumeId, page, timestamp) VALUES (?, ?, ?, ?, ?)"
@@ -1681,6 +1731,20 @@ export async function getVolume(id: string): Promise<VolumeEntity | null> {
   };
 }
 
+/**
+ * Get a volume by its UUID instead of its database ID
+ * This is useful for the reading history which uses the volume_uuid from Mokuro
+ *
+ * @deprecated With schema changes, volume UUIDs are now used as primary keys,
+ * so this function is no longer needed. Use getVolume() directly.
+ */
+export async function getVolumeByUuid(
+  volumeUuid: string
+): Promise<VolumeEntity | null> {
+  // Now that the UUID is the primary key, this is the same as getVolume
+  return getVolume(volumeUuid);
+}
+
 export async function getVolumesByMangaId(
   mangaId: string
 ): Promise<VolumeEntity[]> {
@@ -1733,6 +1797,8 @@ export async function saveVolumes(
     `);
 
     for (const volume of volumesToSave) {
+      // Ensure id and volumeUuid are the same - this is the key change
+      // Using volume.id which should now be the UUID
       insertStmt.run(
         volume.id,
         mangaId,
@@ -1743,7 +1809,7 @@ export async function saveVolumes(
         volume.pageCount,
         volume.addedDate,
         volume.lastModified,
-        volume.volumeUuid,
+        volume.id, // Use id as volumeUuid for consistency
         volume.previewImages ? JSON.stringify(volume.previewImages) : null
       );
     }

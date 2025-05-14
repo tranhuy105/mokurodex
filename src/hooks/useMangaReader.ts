@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { MangaPage, Volume } from "@/types/manga";
 import { MangaService } from "@/lib/services";
+import { addReadingHistoryEntry } from "@/actions/manga-management-actions";
+import { useSettings } from "./useSettings";
 
 interface UseMangaReaderProps {
   mangaId: string;
@@ -35,12 +37,48 @@ export function useMangaReader({
   const [currentVolume, setCurrentVolume] = useState<Volume>(volume);
   const [currentPages, setCurrentPages] = useState<MangaPage[]>(pages);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const { autoSavePosition } = useSettings();
 
   // Use a ref to track the last URL update to prevent redundant updates
   const lastUrlUpdate = useRef<string>(
     `/manga/${mangaId}/${volume.mokuroData.volume_uuid}/${initialPage}`
   );
   const isUrlUpdatePending = useRef<boolean>(false);
+
+  // Track last saved position to prevent saving the same position multiple times
+  const lastSavedPosition = useRef<{ page: number; volumeId: string } | null>(
+    null
+  );
+
+  // Save reading position to database
+  const saveReadingPosition = useCallback(
+    async (page: number, volumeId: string) => {
+      if (!autoSavePosition) return;
+
+      // Don't save if it's the same position we just saved
+      if (
+        lastSavedPosition.current?.page === page &&
+        lastSavedPosition.current?.volumeId === volumeId
+      ) {
+        return;
+      }
+
+      try {
+        // Save the reading position
+        await addReadingHistoryEntry({
+          mangaId,
+          volumeId,
+          page,
+        });
+
+        // Update last saved position
+        lastSavedPosition.current = { page, volumeId };
+      } catch (error) {
+        console.error("Error saving reading position:", error);
+      }
+    },
+    [mangaId, autoSavePosition]
+  );
 
   // Utility function to update the URL efficiently
   const updateUrl = useCallback((path: string, replace: boolean = true) => {
@@ -88,8 +126,17 @@ export function useMangaReader({
       // Update URL without navigation
       const newPath = `/manga/${mangaId}/${currentVolume.mokuroData.volume_uuid}/${validPage}`;
       updateUrl(newPath);
+
+      // Save reading position if auto-save is enabled
+      saveReadingPosition(validPage, currentVolume.mokuroData.volume_uuid);
     },
-    [currentPages, currentVolume.mokuroData.volume_uuid, mangaId, updateUrl]
+    [
+      currentPages,
+      currentVolume.mokuroData.volume_uuid,
+      mangaId,
+      updateUrl,
+      saveReadingPosition,
+    ]
   );
 
   // Navigate to a specific volume
@@ -105,6 +152,11 @@ export function useMangaReader({
         // For reliable volume switching, especially in long strip mode,
         // use a full page navigation for all manga pages
         if (window.location.pathname.includes("/manga/")) {
+          // Save the initial position in the new volume before navigating
+          if (autoSavePosition) {
+            saveReadingPosition(1, volumeId);
+          }
+
           // Use setTimeout to ensure the loading state is applied before navigating
           setTimeout(() => {
             window.location.href = `/manga/${mangaId}/${volumeId}/1`;
@@ -114,7 +166,7 @@ export function useMangaReader({
 
         // Only continue with client-side state update if we're not in the manga reader
         // (e.g., if we're in settings or another page that shows manga volumes)
-        
+
         // Find the new volume from the volumes array
         const newVolume = volumes.find(
           (v) => v.mokuroData.volume_uuid === volumeId
@@ -144,6 +196,9 @@ export function useMangaReader({
         setCurrentPages(newPages);
         setCurrentPage(1);
 
+        // Save initial position in the new volume
+        saveReadingPosition(1, volumeId);
+
         // Update URL using pushState for non-reader pages
         const newPath = `/manga/${mangaId}/${volumeId}/1`;
         updateUrl(newPath, false);
@@ -158,7 +213,15 @@ export function useMangaReader({
         }
       }
     },
-    [currentVolume.mokuroData.volume_uuid, mangaId, router, volumes, updateUrl]
+    [
+      currentVolume.mokuroData.volume_uuid,
+      mangaId,
+      router,
+      volumes,
+      updateUrl,
+      autoSavePosition,
+      saveReadingPosition,
+    ]
   );
 
   // Update URL when volume changes
@@ -168,6 +231,18 @@ export function useMangaReader({
       updateUrl(newPath);
     }
   }, [currentVolume, mangaId, volume, updateUrl]);
+
+  // Save initial reading position when component mounts
+  useEffect(() => {
+    if (autoSavePosition) {
+      saveReadingPosition(initialPage, volume.mokuroData.volume_uuid);
+    }
+  }, [
+    autoSavePosition,
+    initialPage,
+    volume.mokuroData.volume_uuid,
+    saveReadingPosition,
+  ]);
 
   return {
     currentPage,

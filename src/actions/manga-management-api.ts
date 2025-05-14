@@ -21,6 +21,7 @@ import {
   updateUserMangaMetadata,
   addReadingHistoryEntry,
   getReadingHistory,
+  getLastReadPageForVolume,
   getMangaWithUserData,
   getAllMangaWithUserData,
   getMangaByTag,
@@ -169,6 +170,16 @@ export async function fetchReadingHistory(
   mangaId: string
 ): Promise<ReadingHistoryEntry[]> {
   return getReadingHistory(mangaId);
+}
+
+/**
+ * Get last read page for a specific volume
+ */
+export async function fetchLastReadPageForVolume(
+  mangaId: string,
+  volumeId: string
+): Promise<ReadingHistoryEntry | null> {
+  return getLastReadPageForVolume(mangaId, volumeId);
 }
 
 // ========== Combined operations ==========

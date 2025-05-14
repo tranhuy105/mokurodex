@@ -13,6 +13,13 @@ import {
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { MangaPage } from "@/types/manga";
 
+// Interface for the right-to-left changed event
+interface RightToLeftChangedEvent extends CustomEvent {
+  detail: {
+    rightToLeft: boolean;
+  };
+}
+
 interface ReadingModeProps {
   pages: MangaPage[];
   currentPage: number;
@@ -42,24 +49,55 @@ const SinglePageMode = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
 
+  // Track animation state
+  const [animationClass, setAnimationClass] = useState("");
+  const lastPageRef = useRef(currentPage);
+
   // Memoize the current page to prevent unnecessary re-renders
   const page = useMemo(() => pages[currentPage - 1], [pages, currentPage]);
 
-  // Cleanup on unmount
+  // Set animation class when page changes
   useEffect(() => {
-    isMountedRef.current = true;
+    if (!settings.animatePageTurns) return;
 
-    // Preload current and adjacent pages immediately on mount
-    preloadAdjacentPages();
+    if (lastPageRef.current !== currentPage) {
+      const direction = lastPageRef.current < currentPage ? "next" : "prev";
 
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
+      // Fix animation direction logic for right-to-left reading mode
+      if (settings.rightToLeft) {
+        // In RTL mode, "next" means going to a lower page number (right to left)
+        if (direction === "next") {
+          // Moving forward in manga (right to left) - page flips left
+          setAnimationClass("animate-page-flip-left");
+        } else {
+          // Moving backward in manga (left to right) - page flips right
+          setAnimationClass("animate-page-flip-right");
+        }
+      } else {
+        // Standard LTR mode
+        if (direction === "next") {
+          // Moving forward in manga (left to right) - page flips right
+          setAnimationClass("animate-page-flip-right");
+        } else {
+          // Moving backward in manga (right to left) - page flips left
+          setAnimationClass("animate-page-flip-left");
+        }
+      }
+
+      // Clear animation after it completes
+      const timer = setTimeout(() => {
+        setAnimationClass("");
+      }, 600); // Match animation duration
+
+      lastPageRef.current = currentPage;
+      return () => clearTimeout(timer);
+    }
+  }, [currentPage, settings.animatePageTurns, settings.rightToLeft]);
 
   // Preload adjacent pages - extracted to a reusable function
   const preloadAdjacentPages = useCallback(() => {
     const pagesToPreload = [currentPage - 1, currentPage, currentPage + 1];
+    console.log("Preloading pages:", pagesToPreload);
 
     pagesToPreload.forEach((pageNum) => {
       if (
@@ -72,9 +110,27 @@ const SinglePageMode = ({
     });
   }, [currentPage, pages]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    // Preload current and adjacent pages immediately on mount
+    preloadAdjacentPages();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [preloadAdjacentPages]);
+
   // Add event listener for right-to-left changes
   useEffect(() => {
-    const handleRightToLeftChange = () => {
+    const handleRightToLeftChange = (e: Event) => {
+      const rtlEvent = e as RightToLeftChangedEvent;
+      console.log(
+        "Right-to-left changed event received in SinglePageMode, new value:",
+        rtlEvent.detail?.rightToLeft
+      );
+
       if (!isMountedRef.current) return;
 
       // Force update using minimal approach
@@ -120,10 +176,10 @@ const SinglePageMode = ({
 
       if (settings.rightToLeft) {
         // Swap arrow keys in right-to-left mode
-        if (e.key === "ArrowRight" || e.key === "ArrowUp") {
-          handlePrevPage();
-        } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+        if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
           handleNextPage();
+        } else if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+          handlePrevPage();
         }
       } else {
         // Standard left-to-right controls
@@ -214,7 +270,6 @@ const SinglePageMode = ({
       transformRef.current.resetTransform();
     }
   };
-
   return (
     <div
       ref={containerRef}
@@ -248,17 +303,19 @@ const SinglePageMode = ({
               contentClass="flex justify-center items-center h-full w-full"
             >
               {page && (
-                <PageView
-                  key={`${currentPage}-${page.img_path}`}
-                  page={page}
-                  settings={settings}
-                  pageNumber={currentPage}
-                  priority={true}
-                  manga={manga}
-                  volumeId={volumeId}
-                  onCropperStateChange={handleCropperStateChange}
-                  mode="single"
-                />
+                <div className={animationClass}>
+                  <PageView
+                    key={`${currentPage}-${page.img_path}-${settings.rightToLeft}`}
+                    page={page}
+                    settings={settings}
+                    pageNumber={currentPage}
+                    priority={true}
+                    manga={manga}
+                    volumeId={volumeId}
+                    onCropperStateChange={handleCropperStateChange}
+                    mode="single"
+                  />
+                </div>
               )}
             </TransformComponent>
 
@@ -295,30 +352,54 @@ const SinglePageMode = ({
       {/* Navigation buttons - show only when controls are visible and not zoomed */}
       {showControls && !isZoomed && (
         <>
+          {/* Previous Page Button - direction depends on reading mode */}
           <button
-            onClick={handlePrevPage}
-            disabled={currentPage <= 1}
-            className={`absolute left-1 md:left-4 top-1/2 transform -translate-y-1/2 flex items-center justify-center w-12 h-12 ${
-              currentPage > 1
+            onClick={settings.rightToLeft ? handlePrevPage : handlePrevPage}
+            disabled={
+              settings.rightToLeft ? currentPage <= 1 : currentPage <= 1
+            }
+            className={`absolute ${
+              settings.rightToLeft ? "right-1 md:right-4" : "left-1 md:left-4"
+            } top-1/2 transform -translate-y-1/2 flex items-center justify-center w-12 h-12 ${
+              (settings.rightToLeft ? currentPage > 1 : currentPage > 1)
                 ? "bg-gray-800 hover:bg-gray-700"
                 : "bg-gray-800 opacity-40"
             } bg-opacity-70 text-white rounded-full shadow-lg transition-all`}
             aria-label="Previous page"
           >
-            <ArrowLeft size={24} />
+            {settings.rightToLeft ? (
+              <ArrowRight size={24} />
+            ) : (
+              <ArrowLeft size={24} />
+            )}
           </button>
 
+          {/* Next Page Button - direction depends on reading mode */}
           <button
-            onClick={handleNextPage}
-            disabled={currentPage >= pages.length}
-            className={`absolute right-1 md:right-4 top-1/2 transform -translate-y-1/2 flex items-center justify-center w-12 h-12 ${
-              currentPage < pages.length
+            onClick={settings.rightToLeft ? handleNextPage : handleNextPage}
+            disabled={
+              settings.rightToLeft
+                ? currentPage >= pages.length
+                : currentPage >= pages.length
+            }
+            className={`absolute ${
+              settings.rightToLeft ? "left-1 md:left-4" : "right-1 md:right-4"
+            } top-1/2 transform -translate-y-1/2 flex items-center justify-center w-12 h-12 ${
+              (
+                settings.rightToLeft
+                  ? currentPage < pages.length
+                  : currentPage < pages.length
+              )
                 ? "bg-gray-800 hover:bg-gray-700"
                 : "bg-gray-800 opacity-40"
             } bg-opacity-70 text-white rounded-full shadow-lg transition-all`}
             aria-label="Next page"
           >
-            <ArrowRight size={24} />
+            {settings.rightToLeft ? (
+              <ArrowLeft size={24} />
+            ) : (
+              <ArrowRight size={24} />
+            )}
           </button>
         </>
       )}

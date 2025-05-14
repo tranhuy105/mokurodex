@@ -1,9 +1,9 @@
 "use server";
 
-import { MangaImportService } from "@/lib/services/MangaImportService";
+import { MangaEntity, VolumeEntity } from "@/lib/database/DatabaseInterface";
 import { getRepository } from "@/lib/database/MangaRepositoryFactory";
 import { MangaRepository } from "@/lib/database/MangaRepository";
-import { MangaEntity, VolumeEntity } from "@/lib/database/DatabaseInterface";
+import { MangaImportService } from "@/lib/services/MangaImportService";
 
 /**
  * Scan all manga directories and import them into the database
@@ -111,6 +111,56 @@ export async function getDatabaseVolumes(
       `Error in getDatabaseVolumes server action for ${mangaId}:`,
       error
     );
+    return [];
+  }
+}
+
+/**
+ * Clear all manga data and rescan everything
+ * This is useful after schema changes
+ */
+export async function clearAndRescanAllManga(): Promise<MangaEntity[]> {
+  try {
+    console.log("Clearing all manga data and rescanning...");
+
+    const repository = (await getRepository()) as MangaRepository;
+
+    // Get database access - we need to directly access the DB for clearing operations
+    // We're using a type assertion here because the repository doesn't expose this method publicly
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = (repository as any).getDb?.();
+    if (!db) {
+      console.error(
+        "Cannot access database directly for clearing. Falling back to regular scan."
+      );
+      return scanAllManga();
+    }
+
+    // Begin a transaction for the clearing operations
+    const clearTransaction = db.transaction(() => {
+      // Clear all related data
+      db.prepare("DELETE FROM reading_history").run();
+      db.prepare("DELETE FROM collection_manga").run();
+      db.prepare("DELETE FROM manga_tags").run();
+      db.prepare("DELETE FROM user_manga_metadata").run();
+      db.prepare("DELETE FROM volumes").run();
+      db.prepare("DELETE FROM manga").run();
+
+      console.log("All manga data cleared successfully.");
+    });
+
+    // Execute the transaction
+    clearTransaction();
+
+    // Now do a full scan
+    console.log("Starting full rescan...");
+    const importService = new MangaImportService(repository);
+    const results = await importService.scanAllManga();
+
+    console.log(`Rescan complete. Imported ${results.length} manga.`);
+    return results;
+  } catch (error) {
+    console.error("Error in clearAndRescanAllManga server action:", error);
     return [];
   }
 }

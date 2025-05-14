@@ -225,7 +225,7 @@ export class MangaImportService {
 
         // Create volume entity
         const volumeEntity: VolumeEntity = {
-          id: nanoid(),
+          id: mokuroData.volume_uuid || nanoid(),
           mangaId: mangaId,
           volumeNumber: volumeNumber,
           volumeTitle: mokuroData.volume || `Volume ${volumeNumber}`,

@@ -49,6 +49,97 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Book Flip Animations */
+@keyframes page-flip-right {
+  0% {
+    transform: perspective(1200px) rotateY(0deg);
+    transform-origin: left;
+    opacity: 1;
+  }
+  40% {
+    transform: perspective(1200px) rotateY(20deg);
+    transform-origin: left;
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(0deg);
+    transform-origin: left;
+    opacity: 1;
+  }
+}
+
+@keyframes page-flip-left {
+  0% {
+    transform: perspective(1200px) rotateY(0deg);
+    transform-origin: right;
+    opacity: 1;
+  }
+  40% {
+    transform: perspective(1200px) rotateY(-20deg);
+    transform-origin: right;
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(0deg);
+    transform-origin: right;
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.animate-page-flip-right {
+  animation: page-flip-right 0.6s cubic-bezier(0.645, 0.045, 0.355, 1.000) forwards, 
+             fade-in 0.3s ease forwards;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
+.animate-page-flip-left {
+  animation: page-flip-left 0.6s cubic-bezier(0.645, 0.045, 0.355, 1.000) forwards,
+             fade-in 0.3s ease forwards;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
+/* Legacy animations for fallback */
+@keyframes slideLeft {
+  from {
+    transform: translateX(30%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideRight {
+  from {
+    transform: translateX(-30%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-left {
+  animation: slideLeft 300ms ease-out forwards;
+}
+
+.animate-slide-right {
+  animation: slideRight 300ms ease-out forwards;
+}
+
 /* Custom scrollbar styles */
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;

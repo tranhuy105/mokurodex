@@ -26,7 +26,7 @@ export default function Settings({ onClose, settings, onSettingsChange }: Settin
             <input
               type="checkbox"
               checked={settings.darkMode}
-              onChange={(e) => handleChange('darkMode', e.target.checked)}
+              onChange={(e) => handleChange("darkMode", e.target.checked)}
               className="form-checkbox h-5 w-5 text-blue-600"
             />
             <span>Dark Mode</span>
@@ -39,8 +39,8 @@ export default function Settings({ onClose, settings, onSettingsChange }: Settin
             value={settings.fontSize}
             onChange={(e) =>
               handleChange(
-                'fontSize',
-                e.target.value === 'auto' ? 'auto' : parseInt(e.target.value)
+                "fontSize",
+                e.target.value === "auto" ? "auto" : parseInt(e.target.value)
               )
             }
             className="w-full bg-gray-700 rounded p-2"
@@ -59,7 +59,7 @@ export default function Settings({ onClose, settings, onSettingsChange }: Settin
             <input
               type="checkbox"
               checked={settings.showTooltips}
-              onChange={(e) => handleChange('showTooltips', e.target.checked)}
+              onChange={(e) => handleChange("showTooltips", e.target.checked)}
               className="form-checkbox h-5 w-5 text-blue-600"
             />
             <span>Show Tooltips</span>
@@ -71,7 +71,7 @@ export default function Settings({ onClose, settings, onSettingsChange }: Settin
             <input
               type="checkbox"
               checked={settings.ankiEnabled}
-              onChange={(e) => handleChange('ankiEnabled', e.target.checked)}
+              onChange={(e) => handleChange("ankiEnabled", e.target.checked)}
               className="form-checkbox h-5 w-5 text-blue-600"
             />
             <span>Enable Anki Integration</span>
@@ -83,7 +83,7 @@ export default function Settings({ onClose, settings, onSettingsChange }: Settin
             <input
               type="checkbox"
               checked={settings.invertColors}
-              onChange={(e) => handleChange('invertColors', e.target.checked)}
+              onChange={(e) => handleChange("invertColors", e.target.checked)}
               className="form-checkbox h-5 w-5 text-blue-600"
             />
             <span>Invert Colors</span>
@@ -94,8 +94,8 @@ export default function Settings({ onClose, settings, onSettingsChange }: Settin
           <label className="flex items-center space-x-2">
             <input
               type="checkbox"
-              checked={settings.singlePageView}
-              onChange={(e) => handleChange('singlePageView', e.target.checked)}
+              checked={settings.readingMode === "singlePage"}
+              onChange={() => handleChange("readingMode", "singlePage")}
               className="form-checkbox h-5 w-5 text-blue-600"
             />
             <span>Single Page View</span>
@@ -107,7 +107,7 @@ export default function Settings({ onClose, settings, onSettingsChange }: Settin
             <input
               type="checkbox"
               checked={settings.rightToLeft}
-              onChange={(e) => handleChange('rightToLeft', e.target.checked)}
+              onChange={(e) => handleChange("rightToLeft", e.target.checked)}
               className="form-checkbox h-5 w-5 text-blue-600"
             />
             <span>Right to Left</span>
@@ -119,7 +119,7 @@ export default function Settings({ onClose, settings, onSettingsChange }: Settin
             <input
               type="checkbox"
               checked={settings.hasCover}
-              onChange={(e) => handleChange('hasCover', e.target.checked)}
+              onChange={(e) => handleChange("hasCover", e.target.checked)}
               className="form-checkbox h-5 w-5 text-blue-600"
             />
             <span>Has Cover Page</span>

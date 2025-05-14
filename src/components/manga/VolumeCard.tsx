@@ -11,9 +11,12 @@ import {
   Star,
   ChevronRight,
   ChevronLeft,
+  BookOpen,
 } from "lucide-react";
 import { Volume } from "@/types/manga";
 import { getUserMangaMetadata } from "@/actions/manga-management-actions";
+import { ReadingHistoryEntry } from "@/lib/database/DatabaseInterface";
+import { getLastReadPageForVolume } from "@/actions/manga-management-actions";
 
 // Mock data for volumes - only use when real data isn't available
 export const VOLUME_MOCK_DATA = {
@@ -107,6 +110,9 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
   const [isNsfw, setIsNsfw] = useState(false);
   const [isNsfwRevealed, setIsNsfwRevealed] = useState(false);
   const [contentReady, setContentReady] = useState(false);
+  const [lastReadEntry, setLastReadEntry] =
+    useState<ReadingHistoryEntry | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
 
   // Get preview images from the VolumeEntity previewImages property
   const previewImages = volume.previewImages || [];
@@ -133,6 +139,36 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
     setContentReady(false);
     checkNsfwStatus();
   }, [mangaId]);
+
+  // Fetch last read page for this volume
+  useEffect(() => {
+    async function fetchLastReadPage() {
+      try {
+        const historyEntry = await getLastReadPageForVolume(
+          mangaId,
+          volume.mokuroData.volume_uuid
+        );
+
+        if (historyEntry) {
+          setLastReadEntry(historyEntry);
+
+          // Calculate progress percentage if we know the page count
+          if (pageCount > 0) {
+            // Calculate percentage, but cap at 100%
+            const progressPercentage = Math.min(
+              Math.round((historyEntry.page / pageCount) * 100),
+              100
+            );
+            setProgress(progressPercentage);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching last read page:", error);
+      }
+    }
+
+    fetchLastReadPage();
+  }, [mangaId, volume.mokuroData.volume_uuid, pageCount]);
 
   // Handle image load completion
   const handleImageLoad = () => {
@@ -200,6 +236,9 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
     );
   };
 
+  // Get the page to navigate to - either the last read page or page 1
+  const targetPage = lastReadEntry ? lastReadEntry.page : 1;
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 transition-all hover:shadow-lg h-full">
       <div className="sm:flex h-full">
@@ -208,7 +247,7 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
           <Link
             href={`/manga/${encodeURIComponent(mangaId)}/${
               volume.mokuroData.volume_uuid
-            }/1`}
+            }/${targetPage}`}
             className="group block relative w-full aspect-[3/4] bg-gray-100 dark:bg-gray-900"
             onClick={isNsfw && !isNsfwRevealed ? toggleNsfwReveal : undefined}
           >
@@ -263,17 +302,34 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
                   </div>
                 )}
 
+                {/* Reading progress indicator - only show if we have reading progress */}
+                {progress !== null && (
+                  <div className="absolute left-0 right-0 bottom-0 h-1.5 bg-gray-200 dark:bg-gray-700 z-30 overflow-hidden">
+                    <div
+                      className="h-full bg-green-500 transition-all duration-300"
+                      style={{ width: `${progress}%` }}
+                    ></div>
+                  </div>
+                )}
+
                 {/* Gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300"></div>
 
                 {/* Read button */}
-                <div className="absolute bottom-0 left-0 right-0 p-3 flex justify-center transform translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-200">
+                <div className="absolute bottom-3 left-0 right-0 p-3 flex justify-center transform translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-200">
                   <div className="bg-orange-600 hover:bg-orange-700 text-white rounded-full py-2 px-4 flex items-center justify-center shadow-lg">
                     {isNsfw && !isNsfwRevealed ? (
                       <>
                         <EyeOff className="w-4 h-4 mr-2" />
                         <span className="font-medium text-sm">
                           Reveal Content
+                        </span>
+                      </>
+                    ) : lastReadEntry ? (
+                      <>
+                        <BookOpen className="w-4 h-4 mr-2" />
+                        <span className="font-medium text-sm">
+                          Continue Reading
                         </span>
                       </>
                     ) : (
@@ -301,6 +357,11 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
                     NSFW
                   </span>
                 )}
+                {lastReadEntry && (
+                  <span className="ml-2 text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-1.5 py-0.5 rounded">
+                    In Progress
+                  </span>
+                )}
               </h3>
               {volume.mokuroData.title && (
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
@@ -320,10 +381,19 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
               <Eye className="w-4 h-4 mr-1.5 text-gray-400 dark:text-gray-500" />
               <span>{pageCount || "?"} pages</span>
             </div>
-            <div className="flex items-center">
-              <Clock className="w-4 h-4 mr-1.5 text-gray-400 dark:text-gray-500" />
-              <span>{readCount.toLocaleString()} reads</span>
-            </div>
+            {lastReadEntry && pageCount ? (
+              <div className="flex items-center">
+                <BookOpen className="w-4 h-4 mr-1.5 text-green-500" />
+                <span className="text-green-600 dark:text-green-400">
+                  Page {lastReadEntry.page}/{pageCount} ({progress}%)
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center">
+                <Clock className="w-4 h-4 mr-1.5 text-gray-400 dark:text-gray-500" />
+                <span>{readCount.toLocaleString()} reads</span>
+              </div>
+            )}
             <div className="flex items-center">
               <Calendar className="w-4 h-4 mr-1.5 text-gray-400 dark:text-gray-500" />
               <span>{releaseInfo.releaseDate}</span>
@@ -343,7 +413,7 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
               <Link
                 href={`/manga/${encodeURIComponent(mangaId)}/${
                   volume.mokuroData.volume_uuid
-                }/1`}
+                }/${targetPage}`}
                 className="text-xs font-medium text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 flex items-center"
               >
                 View All
@@ -365,7 +435,7 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
                   <Link
                     href={`/manga/${encodeURIComponent(mangaId)}/${
                       volume.mokuroData.volume_uuid
-                    }/1`}
+                    }/${targetPage}`}
                     className="block relative h-full rounded-lg overflow-hidden cursor-pointer"
                     onClick={
                       isNsfw && !isNsfwRevealed

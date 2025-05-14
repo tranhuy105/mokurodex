@@ -6,6 +6,7 @@ import {
   getDatabaseMangaById,
   deleteDatabaseManga,
   getDatabaseVolumes,
+  clearAndRescanAllManga,
 } from "./manga-import-actions";
 
 /**
@@ -59,4 +60,12 @@ export async function fetchDatabaseVolumes(
   mangaId: string
 ): Promise<VolumeEntity[]> {
   return getDatabaseVolumes(mangaId);
+}
+
+/**
+ * Clear all manga data and rescan everything
+ * This is useful after schema changes
+ */
+export async function resetAndRescanAllManga(): Promise<MangaEntity[]> {
+  return clearAndRescanAllManga();
 }
