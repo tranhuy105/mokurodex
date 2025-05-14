@@ -130,4 +130,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Mokuro](https://github.com/kha-white/mokuro) for the manga OCR processing
 - [Yomichan](https://foosoft.net/projects/yomichan/) for Japanese language support
 - [Anki](https://apps.ankiweb.net/) and [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
-- All our [contributors](https://github.com/tranhuy105/mokurodex/graphs/contributors)
