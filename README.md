@@ -2,114 +2,132 @@
 
 <div align="center">
   <img src="public/logo.png" alt="MokuroDex Logo" width="180"/>
-  <h3>Self-hosted mokuro's processed manga reader with Anki integration</h3>
+  <h3>Self-hosted Mokuro-processed manga reader with Anki integration</h3>
+  
+  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+  [![GitHub Stars](https://img.shields.io/github/stars/tranhuy105/mokurodex?style=social)](https://github.com/tranhuy105/mokurodex/stargazers)
+  [![GitHub Issues](https://img.shields.io/github/issues/tranhuy105/mokurodex)](https://github.com/tranhuy105/mokurodex/issues)
+  [![GitHub PRs](https://img.shields.io/github/issues-pr/tranhuy105/mokurodex)](https://github.com/tranhuy105/mokurodex/pulls)
+  [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](https://github.com/tranhuy105/mokurodex/blob/main/CONTRIBUTING.md)
+  
 </div>
 
-## What is MokuroDex?
+## 📖 Overview
 
-MokuroDex is a **self-hosted manga server** (similar to Jellyfin) for reading Mokuro-processed manga on your **local network**. It features a stunning **UI** and powerful Anki integration for japanese learners.
+MokuroDex is a **self-hosted manga server** (similar to Jellyfin) for reading [Mokuro](https://github.com/kha-white/mokuro)-processed manga on your **local network**. It features a modern UI and powerful Anki integration for Japanese language learners.
 
 <div align="center">
   <img src="public/preview.png" alt="MokuroDex Demo" width="800"/>
-  <p><i>Read manga and study vocabulary at the same time</i></p>
+  <p><i>Read manga and study vocabulary simultaneously</i></p>
 </div>
 
-## ✨ Features
+## 🎯 Language Learning Integration
 
-- 🖥️ **Self-hosted server** - host your own manga collection
-- 🎨 **Beautiful UI** - clean, responsive interface inspired by MangaDex
-- 📖 **Multiple reading modes** - single page, double page, vertical scroll
-- 🌓 **Light/dark mode** and customizable reading direction
+MokuroDex was built with Japanese language learners in mind:
 
-## 🔤 Language Learning
+- **Interactive text** - Hover over Japanese text (or tap on mobile) to display a text box
+- **Yomichan-able** - Look up words directly on the page
+- **Anki integration** - Add vocabulary to Anki with one click
+- **Advanced image handling:**
+  - Add the full manga page to your Anki cards
+  - Use the built-in cropping tool to select and add just a specific panel
+  - Save context for later review
 
+## 🚀 Quick Start
 
+### Prerequisites
 
-1. Hover over Japanese text (or tap on mobile) → Text box appears
-2. Use Yomichan to look up words directly on the page
-3. Add words to Anki with one click
-4. **Save images to Anki cards:**
-   - Add the full current manga page to your Anki card
-   - Or use the built-in cropping tool to select and add just a panel
+- [Node.js](https://nodejs.org/) (v16 or later)
+- [npm](https://www.npmjs.com/) (v7 or later)
+- Mokuro-processed manga files
 
-## 🚀 Quick Setup
+### Installation
 
 ```bash
-# Install
-git clone https://github.com/imhuy105/mokurodex.git
+# Clone the repository
+git clone https://github.com/tranhuy105/mokurodex.git
+
+# Navigate to project directory
 cd mokurodex
+
+# Install dependencies
 npm install
 
-# Run
+# Start the development server
 npm run dev
 
-# Access from your browser
+# Access MokuroDex in your browser
 http://localhost:3000
 ```
 
-## 📂 Manga Directory Setup
+## 📂 Manga Directory Structure
 
-Since MokuroDex serves manga files over your network, you need to put your manga in the right place:
+MokuroDex requires a specific directory structure to properly index and serve your manga:
 
 ```
 public/MANGA/
-  ├── One Piece/              # Manga name
+  ├── One Piece/              # Manga title
   │   ├── Volume 01/          # Volume name
   │   │   ├── 001.jpg         # Mokuro-processed images
   │   │   ├── 002.jpg
   │   │   └── ...
   │   ├── volume.mokuro       # Mokuro metadata file
   │   └── ...
-  └── Naruto/                 # Another manga
+  └── Naruto/                 # Another manga title
       └── ...
 ```
 
-**Why this structure?** MokuroDex needs to know where to find your manga files to serve them to browsers on your network.
+### Library Scanning
 
-### Required: Scan Your Library
+**After adding or updating manga files, you must scan your library:**
 
-**After adding manga files, you MUST scan your library to make them appear:**
-
-1. Go to **Settings → Import → Scan Library**
+1. Navigate to **Settings → Import → Scan Library**
 2. Wait for the scan to complete
 
 <div align="center">
   <img src="public/scan.png" alt="Scan Library Screenshot" width="600"/>
-  <p><i>The Scan Library feature is required for MokuroDex to recognize your manga</i></p>
+  <p><i>The library scanning process indexes your manga collection</i></p>
 </div>
 
-## 📱 Mobile Setup
+## 📱 Mobile Usage Setup
 
-To read manga and create Anki cards from your phone/tablet:
+To use MokuroDex on mobile devices with Anki integration:
 
-### 1. On your computer running Anki:
+### Anki Configuration (Computer)
 
 1. Install [Anki](https://apps.ankiweb.net/)
 2. Install the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on
-3. In Anki: Tools → Add-ons → AnkiConnect → Config
-4. Change these settings:
+3. Configure AnkiConnect:
+   - In Anki: Tools → Add-ons → AnkiConnect → Config
+   - Update the configuration:
    ```json
    {
      "webBindAddress": "0.0.0.0",
      "webCorsOriginList": ["*"]
    }
    ```
-5. Restart Anki
+4. Restart Anki
 
-### 2. Set a static IP (recommended):
+### Network Configuration (Recommended)
 
-To avoid changing settings when your IP changes:
-- Go to your router (usually http://192.168.0.1 or http://192.168.1.1)
-- Find "DHCP Reservation" or "Static IP"
-- Add your computer's MAC address and assign it a fixed IP (like 192.168.1.100)
+For consistent access across devices:
 
-### 3. On your phone:
+- Configure a static IP for your server through DHCP reservation
+- Example router access: http://192.168.0.1 or http://192.168.1.1
+- Assign your computer a fixed IP (e.g., 192.168.1.100)
+
+### Mobile Device Setup
 
 1. Install Yomichan on your mobile browser
-2. Access MokuroDex at `http://[your-computer-ip]:3000`
+2. Access MokuroDex at `http://[your-server-ip]:3000`
 
-This lets you read manga on your phone, look up words with Yomichan, and send cards (with images!) to Anki running on your computer.
+## 📄 License
 
-## License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-Open source for personal use only.
+## 🙏 Acknowledgments
+
+- [Mokuro](https://github.com/kha-white/mokuro) for the manga OCR processing
+- [Yomichan](https://foosoft.net/projects/yomichan/) for Japanese language support
+- [Anki](https://apps.ankiweb.net/) and [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
+- All our [contributors](https://github.com/tranhuy105/mokurodex/graphs/contributors)
