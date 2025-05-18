@@ -103,7 +103,7 @@ async function CollectionContent({ id }: { id: string }) {
             variant="warning"
           />
         ) : (
-          <MangaGrid mangaList={mangaList} />
+          <MangaGrid mangaList={mangaList} showFilters={false} />
         )}
       </div>
     </>

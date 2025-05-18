@@ -22,7 +22,6 @@ export default function Navbar() {
   const [mounted, setMounted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // After hydration, we can show the theme toggle
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -38,7 +37,7 @@ export default function Navbar() {
           {/* Logo and navigation links */}
           <div className="flex items-center space-x-4">
             <Link href="/" className="flex items-center">
-              <div className="h-9 w-9 rounded flex items-center justify-center shadow-sm">
+              <div className="h-9 w-9 rounded flex items-center justify-center">
                 <Image
                   src="/logo.png"
                   alt="MokuroDex"

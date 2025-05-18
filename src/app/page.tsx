@@ -1,4 +1,4 @@
-import { Book, Clock } from "lucide-react";
+import { Book } from "lucide-react";
 // import { getAllManga } from "@/actions/manga-actions";
 import { PageHeader } from "@/components/ui/PageHeader";
 // import { EmptyState } from "@/components/ui/EmptyState";
@@ -6,25 +6,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Suspense } from "react";
 import Link from "next/link";
 // import { MangaCard } from "@/components/manga/MangaCard";
-import { fetchAllManga } from "@/actions/manga-api";
-import Image from "next/image";
 import { FileText, LayoutGrid } from "lucide-react";
-
-// Format date helper function
-function formatDate(dateString?: string): string {
-  if (!dateString) return "";
-
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return "";
-  }
-}
+import { MangaGrid } from "@/components/manga/MangaGrid";
+import { getAllMangaWithUserData } from "@/actions/manga-management-actions";
 
 // Main content component
 // async function MangaContent() {
@@ -157,7 +141,7 @@ function formatDate(dateString?: string): string {
 // }
 
 async function HomeStats() {
-  const mangaList = await fetchAllManga();
+  const mangaList = await getAllMangaWithUserData();
   const totalManga = mangaList.length;
   const totalVolumes = mangaList.reduce(
     (count, manga) => count + manga.volumes,
@@ -249,59 +233,11 @@ async function HomeStats() {
             </Link>
           </div>
 
-          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 overflow-hidden divide-y divide-gray-100 dark:divide-gray-700">
-            {recentManga.map((manga) => (
-              <Link
-                key={manga.id}
-                href={`/manga/${encodeURIComponent(manga.id)}`}
-                className="flex items-center p-4 hover:opacity-80 dark:hover:bg-gray-750 transition-colors group"
-              >
-                <div className="w-14 h-20 flex-shrink-0 bg-gray-100 dark:bg-gray-700 rounded-md overflow-hidden relative">
-                  {manga.coverImage ? (
-                    <Image
-                      src={manga.coverImage}
-                      alt={manga.title}
-                      fill
-                      className="object-cover"
-                      sizes="56px"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Book className="w-6 h-6 text-gray-400" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="ml-4 flex-1 min-w-0">
-                  <h3 className="font-medium text-gray-900 dark:text-white group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors truncate">
-                    {manga.title}
-                  </h3>
-
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center">
-                      <Book className="w-3.5 h-3.5 mr-1 text-orange-500" />
-                      <span>
-                        {manga.volumes}{" "}
-                        {manga.volumes === 1 ? "volume" : "volumes"}
-                      </span>
-                    </div>
-                    {manga.lastModified && (
-                      <div className="flex items-center">
-                        <Clock className="w-3.5 h-3.5 mr-1 text-blue-500" />
-                        <span>{formatDate(manga.lastModified)}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="ml-4 hidden sm:block">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                    New
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <MangaGrid
+            mangaList={recentManga}
+            InitialViewMode="list"
+            showFilters={false}
+          />
         </div>
       )}
 
