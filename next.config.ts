@@ -18,9 +18,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  experimental: {
-    serverComponentsExternalPackages: ["sharp", "fs", "path"],
-  },
+  serverExternalPackages: ["sharp", "fs", "path"],
 };
 
 export default nextConfig;
