@@ -1,7 +1,7 @@
 import { AlertTriangle, Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { getAllCollections } from "@/actions/manga-management-actions";
+import { getCollections } from "@/actions/manga-management-prisma";
 import { Suspense } from "react";
 import Link from "next/link";
 import { CollectionGrid } from "@/components/collections/CollectionGrid";
@@ -10,7 +10,7 @@ import { CollectionGridSkeleton } from "@/components/collections/CollectionGridS
 // Main content component
 async function CollectionsContent() {
   try {
-    const collections = await getAllCollections();
+    const collections = await getCollections();
 
     if (collections.length === 0) {
       return (

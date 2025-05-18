@@ -13,15 +13,18 @@ import {
   EyeOff,
 } from "lucide-react";
 import Image from "next/image";
-import { Volume, MangaMetadata } from "@/types/manga";
+import {
+  Volume,
+  MangaMetadata,
+  ExtendedUserMangaMetadata,
+} from "@/types/manga";
 import { VolumeGrid } from "./VolumeGrid";
 import { MangaManagementPanel } from "./MangaManagementPanel";
 import { useEffect, useReducer, useRef, useState } from "react";
-import { UserMangaMetadata } from "@/lib/database/DatabaseInterface";
 import {
-  getMangaWithUserData,
-  updateUserMangaMetadata,
-} from "@/actions/manga-management-actions";
+  fetchMangaWithUserData,
+  updateMangaMetadata,
+} from "@/actions/manga-management-api-prisma";
 import { TagManagement } from "./TagManagement";
 import { MangaManagementPanelSkeleton } from "./MangaManagementPanelSkeleton";
 
@@ -56,7 +59,7 @@ interface MangaDetailProps {
 
 // Create a reducer to handle data fetching states
 type State = {
-  userData: UserMangaMetadata | null;
+  userData: ExtendedUserMangaMetadata | null;
   isLoading: boolean;
   error: Error | null;
   lastFetched: number;
@@ -64,7 +67,7 @@ type State = {
 
 type Action =
   | { type: "FETCH_START" }
-  | { type: "FETCH_SUCCESS"; payload: UserMangaMetadata | null }
+  | { type: "FETCH_SUCCESS"; payload: ExtendedUserMangaMetadata | null }
   | { type: "FETCH_ERROR"; payload: Error }
   | { type: "RESET" };
 
@@ -152,7 +155,7 @@ export function MangaDetail({ manga }: MangaDetailProps) {
       dispatch({ type: "FETCH_START" });
 
       try {
-        const mangaData = await getMangaWithUserData(manga.id);
+        const mangaData = await fetchMangaWithUserData(manga.id);
 
         // Only update state if component is still mounted
         if (isMounted.current) {
@@ -189,7 +192,7 @@ export function MangaDetail({ manga }: MangaDetailProps) {
       console.log(`[MangaDetail] Refreshing manga data for ${manga.id}`);
       dispatch({ type: "FETCH_START" });
 
-      const updatedManga = await getMangaWithUserData(manga.id);
+      const updatedManga = await fetchMangaWithUserData(manga.id);
 
       if (updatedManga) {
         console.log(`[MangaDetail] Updated userData for manga ${manga.id}:`, {
@@ -637,7 +640,7 @@ export function MangaDetail({ manga }: MangaDetailProps) {
                 <TagManagement
                   showInline={true}
                   selectedTagIds={userData?.tagIds || []}
-                  onTagSelect={async (tagId) => {
+                  onTagSelect={async (tagId: string) => {
                     // Toggle tag selection
                     const currentTags = userData?.tagIds || [];
                     const newTags = currentTags.includes(tagId)
@@ -645,7 +648,7 @@ export function MangaDetail({ manga }: MangaDetailProps) {
                       : [...currentTags, tagId];
 
                     // Update user metadata with new tags
-                    await updateUserMangaMetadata(manga.id, {
+                    await updateMangaMetadata(manga.id, {
                       tagIds: newTags,
                     });
 

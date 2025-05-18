@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DatabaseWorkbench } from "@/components/database/DatabaseWorkbench";
 
 export default function DatabaseSettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -225,9 +224,6 @@ export default function DatabaseSettingsPage() {
                 SQL workbench and database schema viewer
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <DatabaseWorkbench />
-            </CardContent>
           </Card>
         </TabsContent>
       </Tabs>

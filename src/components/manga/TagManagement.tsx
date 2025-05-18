@@ -11,12 +11,12 @@ import {
   Palette,
 } from "lucide-react";
 import {
-  getAllTags,
-  createTag,
-  updateTag,
-  deleteTag,
-} from "@/actions/manga-management-actions";
-import { Tag } from "@/lib/database/DatabaseInterface";
+  fetchTags,
+  addTag,
+  modifyTag,
+  removeTag,
+} from "@/actions/manga-management-api-prisma";
+import { Tag } from "@prisma/client";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 // Global cache for tags to prevent repeated fetching
@@ -125,7 +125,7 @@ export function TagManagement({
 
       // Fetch from server if cache is expired or empty
       console.log("[TagManagement] Fetching tags from server");
-      const tagsData = await getAllTags();
+      const tagsData = await fetchTags();
       console.log("[TagManagement] Fetched tags:", tagsData.length);
 
       // Update cache
@@ -164,7 +164,7 @@ export function TagManagement({
 
     try {
       console.log("[TagManagement] Creating new tag:", newTag);
-      const createdTag = await createTag(newTag);
+      const createdTag = await addTag(newTag);
 
       if (createdTag) {
         console.log("[TagManagement] Tag created:", createdTag);
@@ -202,7 +202,11 @@ export function TagManagement({
     if (!editingTag) return;
 
     try {
-      const updatedTag = await updateTag(editingTag.id, editingTag);
+      const updatedTag = await modifyTag(editingTag.id, {
+        name: editingTag.name,
+        color: editingTag.color || undefined,
+        type: editingTag.type as "genre" | "content" | "custom",
+      });
       if (updatedTag) {
         setTags((prev) =>
           prev.map((tag) => (tag.id === updatedTag.id ? updatedTag : tag))
@@ -223,7 +227,7 @@ export function TagManagement({
   // Delete a tag
   const handleDeleteTag = async (id: string) => {
     try {
-      const success = await deleteTag(id);
+      const success = await removeTag(id);
       if (success) {
         setTags((prev) => prev.filter((tag) => tag.id !== id));
         filterTags(
@@ -1165,11 +1169,12 @@ function TagItem({
   const [showActions, setShowActions] = useState(false);
 
   // Get color classes based on the tag's color
-  const getColorClasses = (color: string | undefined) => {
-    const tagColor = color || "blue";
+  const getColorClasses = (color: string | undefined | null) => {
+    // Convert null to undefined for consistency
+    const safeColor = color || undefined;
 
     if (isSelected) {
-      switch (tagColor) {
+      switch (safeColor) {
         case "gray":
           return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300";
         case "red":

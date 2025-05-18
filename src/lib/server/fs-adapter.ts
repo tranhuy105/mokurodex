@@ -115,3 +115,18 @@ export async function getFileStats(filePath: string): Promise<{
     throw error;
   }
 }
+
+/**
+ * Check if a directory exists and is accessible
+ */
+export async function directoryExists(dirPath: string): Promise<boolean> {
+  try {
+    const fs = await import("fs/promises");
+    await fs.access(dirPath);
+    const stats = await fs.stat(dirPath);
+    return stats.isDirectory();
+  } catch (error) {
+    console.error(`Directory ${dirPath} does not exist or is not accessible:`, error);
+    return false;
+  }
+}

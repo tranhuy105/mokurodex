@@ -2,13 +2,13 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Collection } from "@/lib/database/DatabaseInterface";
 import { Edit, MoreVertical, Trash, X } from "lucide-react";
-import { deleteCollection } from "@/actions/manga-management-actions";
+import { deleteCollection } from "@/actions/manga-management-prisma";
 import Link from "next/link";
+import { ExtendedCollection } from "@/types/manga";
 
 interface CollectionActionsProps {
-  collection: Collection;
+  collection: ExtendedCollection;
 }
 
 export function CollectionActions({ collection }: CollectionActionsProps) {

@@ -2,7 +2,6 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "next-themes";
 import Providers from "@/context/Providers";
-import ServerInitializer from "@/components/ServerInitializer";
 import NavbarWrapper from "@/components/ui/NavbarWrapper";
 
 // Remove direct import since we're using the component approach
@@ -36,8 +35,6 @@ export default function RootLayout({
       <body className="antialiased bg-gray-100 dark:bg-gray-900 min-h-screen">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <Providers>
-            {/* This component triggers server initialization */}
-            <ServerInitializer />
             <NavbarWrapper />
             <main>{children}</main>
             <Toaster position="bottom-right" />

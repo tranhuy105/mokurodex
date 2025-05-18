@@ -1,13 +1,13 @@
 import {
   getCollection,
   getMangaByCollection,
-} from "@/actions/manga-management-actions";
+} from "@/actions/manga-management-prisma";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { MangaGrid } from "@/components/manga/MangaGrid";
 import { MangaGridSkeleton } from "@/components/manga/MangaGridSkeleton";
 import { Suspense } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Pencil } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Pencil, BookOpen } from "lucide-react";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { formatDate } from "@/lib/utils";
@@ -32,15 +32,15 @@ async function CollectionContent({ id }: { id: string }) {
   return (
     <>
       {/* Collection Header */}
-      <div className="relative mb-8">
+      <div className="relative mb-8 group">
         {/* Cover Image or Gradient Background */}
-        <div className="absolute inset-0 h-64 bg-gradient-to-r from-orange-500 to-amber-600 rounded-xl overflow-hidden">
+        <div className="absolute inset-0 h-64 bg-gradient-to-r from-orange-500 to-amber-600 rounded-xl overflow-hidden transition-all duration-500 ease-in-out group-hover:shadow-lg">
           {collection.coverImage && (
             <Image
               src={collection.coverImage}
               alt={collection.name}
               fill
-              className="object-cover opacity-40"
+              className="object-cover opacity-40 transition-transform duration-700 ease-in-out group-hover:scale-105"
               priority
             />
           )}
@@ -50,7 +50,7 @@ async function CollectionContent({ id }: { id: string }) {
         {/* Collection Info */}
         <div className="relative pt-36 pb-6 px-6 z-10 text-white">
           <div className="flex items-start justify-between">
-            <div>
+            <div className="transform transition-all duration-300 ease-in-out group-hover:translate-y-[-4px]">
               <h1 className="text-3xl font-bold tracking-tight">
                 {collection.name}
               </h1>
@@ -60,6 +60,7 @@ async function CollectionContent({ id }: { id: string }) {
                 </p>
               )}
               <div className="mt-3 flex items-center text-sm text-white/70">
+                <BookOpen className="w-4 h-4 mr-1.5" />
                 <span>{collection.mangaIds?.length || 0} manga</span>
                 <span className="mx-2">•</span>
                 <span>
@@ -84,7 +85,7 @@ async function CollectionContent({ id }: { id: string }) {
       </div>
 
       {/* Collection Manga Content */}
-      <div>
+      <div className="animate-fadeIn">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-medium">Manga in this collection</h2>
           <Link href={`/collections/${id}/edit`}>
@@ -125,7 +126,7 @@ function CollectionContentSkeleton() {
     <>
       {/* Skeleton for Collection Header */}
       <div className="relative mb-8">
-        <div className="absolute inset-0 h-64 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+        <div className="absolute inset-0 h-64 bg-gray-200 dark:bg-gray-700 rounded-xl animate-pulse"></div>
         <div className="relative pt-36 pb-6 px-6 z-10">
           <div className="space-y-3">
             <div className="h-8 w-64 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
@@ -152,3 +153,12 @@ function CollectionContentSkeleton() {
     </>
   );
 }
+
+// Add this to your global CSS file:
+// @keyframes fadeIn {
+//   from { opacity: 0; transform: translateY(10px); }
+//   to { opacity: 1; transform: translateY(0); }
+// }
+// .animate-fadeIn {
+//   animation: fadeIn 0.5s ease-out forwards;
+// }

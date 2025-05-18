@@ -3,16 +3,14 @@
 import { Settings } from "@/hooks/useSettings";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import PageView from "../PageView";
-import { MangaPage } from "@/types/manga";
+import { Page } from "@prisma/client";
 
 interface ReadingModeProps {
-  pages: MangaPage[];
+  pages: Page[];
   currentPage: number;
   settings: Settings;
   initialPage: number;
   onPageChange?: (page: number) => void;
-  manga: string;
-  volumeId: string;
   showControls?: boolean;
 }
 
@@ -22,8 +20,6 @@ const LongStripMode = ({
   settings,
   initialPage,
   onPageChange,
-  manga,
-  volumeId,
 }: ReadingModeProps) => {
   // Stable refs for DOM elements and tracking
   const containerRef = useRef<HTMLDivElement>(null);
@@ -365,15 +361,13 @@ const LongStripMode = ({
             page={page}
             settings={settings}
             pageNumber={pageNumber}
-            manga={manga}
-            volumeId={volumeId}
             priority={Math.abs(pageNumber - activePageNumber) < 3}
             mode="longStrip"
           />
         </div>
       );
     });
-  }, [visibleRange, pages, settings, manga, volumeId, activePageNumber]);
+  }, [visibleRange, pages, settings, activePageNumber]);
 
   return (
     <div

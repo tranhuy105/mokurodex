@@ -1,5 +1,5 @@
+import { prisma } from "@/lib/prisma";
 import { cache } from "react";
-import { getRepository } from "@/lib/database/MangaRepositoryFactory";
 
 export interface AppConfig {
   siteName: string;
@@ -25,9 +25,9 @@ const defaultConfig: AppConfig = {
 // Use React's cache to prevent multiple DB calls for the same config
 export const getConfig = cache(async (): Promise<AppConfig> => {
   try {
-    // Try to get settings from the database
-    const repository = await getRepository();
-    const dbSettings = await repository.getSettings();
+    const dbSettings = await prisma.settings.findUnique({
+      where: { id: "1" },
+    });
 
     if (!dbSettings) {
       console.log("No settings found in database, using default config");

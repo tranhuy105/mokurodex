@@ -11,7 +11,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
-import { MangaPage } from "@/types/manga";
+import { Page } from "@prisma/client";
 
 // Interface for the right-to-left changed event
 interface RightToLeftChangedEvent extends CustomEvent {
@@ -21,7 +21,7 @@ interface RightToLeftChangedEvent extends CustomEvent {
 }
 
 interface ReadingModeProps {
-  pages: MangaPage[];
+  pages: Page[];
   currentPage: number;
   settings: Settings;
   initialPage: number;
@@ -37,12 +37,10 @@ const SinglePageMode = ({
   currentPage,
   settings,
   onPageChange,
-  manga,
-  volumeId,
   showControls = false,
 }: ReadingModeProps) => {
   // Use direct ref access to avoid unnecessary re-renders
-  const preloadedPagesRef = useRef<{ [key: number]: MangaPage }>({});
+  const preloadedPagesRef = useRef<{ [key: number]: Page }>({});
   const [isCropperOpen, setIsCropperOpen] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
   const transformRef = useRef(null);
@@ -305,13 +303,11 @@ const SinglePageMode = ({
               {page && (
                 <div className={animationClass}>
                   <PageView
-                    key={`${currentPage}-${page.img_path}-${settings.rightToLeft}`}
+                    key={`${currentPage}-${page.imagePath}-${settings.rightToLeft}`}
                     page={page}
                     settings={settings}
                     pageNumber={currentPage}
                     priority={true}
-                    manga={manga}
-                    volumeId={volumeId}
                     onCropperStateChange={handleCropperStateChange}
                     mode="single"
                   />

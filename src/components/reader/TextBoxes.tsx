@@ -1,9 +1,8 @@
 "use client";
 
 import { Settings } from "@/hooks/useSettings";
-import { TextBlock } from "@/types/manga";
 import { useEffect, useRef, useState } from "react";
-
+import { TextBlock } from "@prisma/client";
 interface TextBoxesProps {
   blocks: TextBlock[];
   settings: Settings;
@@ -76,9 +75,18 @@ export default function TextBoxes({
   // Sort blocks by area (largest first)
   const sortedBlocks = blocks
     .map((block) => {
-      const { box, font_size, lines, vertical } = block;
+      // Parse the JSON string to get the lines array
+      const lines = block.text
+        ? typeof block.text === "string" && block.text.startsWith("[")
+          ? JSON.parse(block.text)
+          : block.text.split("\n")
+        : [];
+      const vertical = block.isVertical;
 
-      const [xmin, ymin, xmax, ymax] = box;
+      const xmin = block.boxX;
+      const ymin = block.boxY;
+      const xmax = block.boxX + block.boxWidth;
+      const ymax = block.boxY + block.boxHeight;
 
       // Clamp values to ensure they're within image boundaries
       const clampedXmin = clamp(xmin, 0, imgWidth);
@@ -97,7 +105,7 @@ export default function TextBoxes({
         height: `${height}px`,
         fontSize:
           settings.fontSize === "auto"
-            ? `${font_size}px`
+            ? `${block.fontSize}px`
             : `${settings.fontSize}pt`,
         writingMode: vertical ? "vertical-rl" : "horizontal-tb",
         lines,

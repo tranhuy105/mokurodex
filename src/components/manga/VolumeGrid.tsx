@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Volume } from "@/types/manga";
 import { VolumeCard } from "./VolumeCard";
 import { ChevronDown, SortAsc } from "lucide-react";
+import { Volume } from "@/types/manga";
 
 interface VolumeGridProps {
   volumes: Volume[];
@@ -15,8 +15,8 @@ export function VolumeGrid({ volumes, mangaId }: VolumeGridProps) {
 
   // Sort volumes based on current sort order
   const sortedVolumes = [...volumes].sort((a, b) => {
-    const volA = parseInt(a.mokuroData.volume.replace(/\D/g, "") || "0");
-    const volB = parseInt(b.mokuroData.volume.replace(/\D/g, "") || "0");
+    const volA = parseInt(a.volumeName?.replace(/\D/g, "") || "0");
+    const volB = parseInt(b.volumeName?.replace(/\D/g, "") || "0");
     return sortOrder === "asc" ? volA - volB : volB - volA;
   });
 

@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { getRepository } from "@/lib/database/MangaRepositoryFactory";
-import { Tag, Collection } from "@/lib/database/DatabaseInterface";
+import { Tag } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const repository = await getRepository();
-
     // Create genre tags
     const genreTags: Omit<Tag, "id">[] = [
       { name: "Action", color: "red", type: "genre" as const },
@@ -39,36 +37,17 @@ export async function GET() {
       { name: "Psychological", color: "purple", type: "content" as const },
     ];
 
-    // Create some collections
-    const collections: Omit<Collection, "id" | "createdAt" | "updatedAt">[] = [
-      {
-        name: "Currently Reading",
-        description: "Manga I'm actively reading now",
-        mangaIds: [],
-      },
-      {
-        name: "Favorites",
-        description: "My all-time favorite manga",
-        mangaIds: [],
-      },
-      {
-        name: "To Read Next",
-        description: "Manga I plan to read soon",
-        mangaIds: [],
-      },
-    ];
-
     // Insert data
     const createdGenreTags = await Promise.all(
-      genreTags.map((tag) => repository.createTag(tag))
+      genreTags.map((tag) =>
+        prisma.tag.create({ data: { ...tag, id: tag.name } })
+      )
     );
 
     const createdContentTags = await Promise.all(
-      contentTags.map((tag) => repository.createTag(tag))
-    );
-
-    const createdCollections = await Promise.all(
-      collections.map((collection) => repository.createCollection(collection))
+      contentTags.map((tag) =>
+        prisma.tag.create({ data: { ...tag, id: tag.name } })
+      )
     );
 
     return NextResponse.json({
@@ -76,7 +55,6 @@ export async function GET() {
       data: {
         genreTags: createdGenreTags.length,
         contentTags: createdContentTags.length,
-        collections: createdCollections.length,
       },
     });
   } catch (error) {

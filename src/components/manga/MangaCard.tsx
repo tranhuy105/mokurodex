@@ -1,8 +1,8 @@
 "use client";
 
-import { UserMangaMetadata } from "@/lib/database/DatabaseInterface";
 import { formatDate } from "@/lib/utils";
 import { MangaMetadata } from "@/types/manga";
+import { UserMangaMetadata } from "@prisma/client";
 import {
     Book,
     BookmarkX,

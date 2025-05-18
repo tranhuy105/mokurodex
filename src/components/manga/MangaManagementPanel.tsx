@@ -21,21 +21,26 @@ import {
   Loader2,
   Eye,
 } from "lucide-react";
-import { MangaMetadata } from "@/types/manga";
-import {
-  UserMangaMetadata,
-  Collection,
-} from "@/lib/database/DatabaseInterface";
+import { MangaMetadata, ExtendedUserMangaMetadata } from "@/types/manga";
 import {
   updateUserMangaMetadata,
-  getAllCollections,
-  addMangaToCollection,
-  removeMangaFromCollection,
-} from "@/actions/manga-management-actions";
+  getCollections,
+} from "@/actions/manga-management-prisma";
+
+// Define Collection type locally
+interface Collection {
+  id: string;
+  name: string;
+  description: string | null;
+  coverImage: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  mangaIds?: string[];
+}
 
 interface MangaManagementPanelProps {
   manga: MangaMetadata;
-  userData: UserMangaMetadata | null;
+  userData: ExtendedUserMangaMetadata | null;
   onUpdate?: () => void;
   isLoading?: boolean;
 }
@@ -201,10 +206,12 @@ export function MangaManagementPanel({
   const [isUpdating, setIsUpdating] = useState(false);
   const [favorite, setFavorite] = useState(userData?.favorite || false);
   const [isNsfw, setIsNsfw] = useState(userData?.isNsfw || false);
-  const [rating, setRating] = useState<number | undefined>(userData?.rating);
-  const [status, setStatus] = useState<
-    "reading" | "completed" | "on-hold" | "dropped" | "plan-to-read" | undefined
-  >(userData?.status);
+  const [rating, setRating] = useState<number | undefined>(
+    userData?.rating || undefined
+  );
+  const [status, setStatus] = useState<string | undefined>(
+    userData?.status || undefined
+  );
   const [notes, setNotes] = useState(userData?.notes || "");
   const [isEditingNotes, setIsEditingNotes] = useState(false);
 
@@ -228,8 +235,8 @@ export function MangaManagementPanel({
     if (userData) {
       setFavorite(userData.favorite);
       setIsNsfw(userData.isNsfw || false);
-      setRating(userData.rating);
-      setStatus(userData.status);
+      setRating(userData.rating || undefined);
+      setStatus(userData.status || undefined);
       setNotes(userData.notes || "");
       setSelectedCollectionIds(userData.collectionIds || []);
       setMetadata({
@@ -262,7 +269,7 @@ export function MangaManagementPanel({
 
       // If cache is invalid or expired, fetch fresh data
       dispatchCollection({ type: "FETCH_START" });
-      const collectionsData = await getAllCollections();
+      const collectionsData = await getCollections();
 
       // Store in state and cache
       dispatchCollection({
@@ -321,29 +328,25 @@ export function MangaManagementPanel({
         );
 
         // Update UI state immediately for responsive feel
-        setSelectedCollectionIds((current) => {
-          const newState = isSelected
-            ? current.filter((id) => String(id) !== String(collectionId))
-            : [...current, collectionId];
-          return newState;
+        const newCollectionIds = isSelected
+          ? selectedCollectionIds.filter(
+              (id) => String(id) !== String(collectionId)
+            )
+          : [...selectedCollectionIds, collectionId];
+
+        setSelectedCollectionIds(newCollectionIds);
+
+        // Update user metadata with new collection IDs
+        const result = await updateUserMangaMetadata(manga.id, {
+          collectionIds: newCollectionIds,
         });
 
-        // Make the API call in the background
-        const success = isSelected
-          ? await removeMangaFromCollection(collectionId, manga.id)
-          : await addMangaToCollection(collectionId, manga.id);
-
-        if (!success) {
+        if (!result) {
           // Revert the UI state if the operation failed
           console.error(
             `Failed to ${isSelected ? "remove from" : "add to"} collection`
           );
-          setSelectedCollectionIds((current) => {
-            const revertedState = isSelected
-              ? [...current, collectionId]
-              : current.filter((id) => String(id) !== String(collectionId));
-            return revertedState;
-          });
+          setSelectedCollectionIds(userData?.collectionIds || []);
         }
       } catch (error) {
         console.error("Error toggling collection:", error);
@@ -353,12 +356,18 @@ export function MangaManagementPanel({
         setIsUpdating(false);
       }
     },
-    [isUpdating, selectedCollectionIds, manga.id, userData]
+    [
+      isUpdating,
+      selectedCollectionIds,
+      manga.id,
+      userData,
+      updateUserMangaMetadata,
+    ]
   );
 
   // Save changes to user metadata with debouncing
   const saveChanges = useCallback(
-    async (updates: Partial<UserMangaMetadata>) => {
+    async (updates: Partial<ExtendedUserMangaMetadata>) => {
       try {
         setIsUpdating(true);
         await updateUserMangaMetadata(manga.id, updates);
@@ -417,14 +426,7 @@ export function MangaManagementPanel({
 
   // Update status
   const handleStatusChange = useCallback(
-    async (
-      newStatus:
-        | "reading"
-        | "completed"
-        | "on-hold"
-        | "dropped"
-        | "plan-to-read"
-    ) => {
+    async (newStatus: string) => {
       setStatus(newStatus);
       await saveChanges({ status: newStatus });
     },
@@ -587,16 +589,7 @@ export function MangaManagementPanel({
               ].map((item) => (
                 <button
                   key={item.value}
-                  onClick={() =>
-                    handleStatusChange(
-                      item.value as
-                        | "reading"
-                        | "completed"
-                        | "on-hold"
-                        | "dropped"
-                        | "plan-to-read"
-                    )
-                  }
+                  onClick={() => handleStatusChange(item.value as string)}
                   disabled={isUpdating || isLoading}
                   className={`flex flex-col items-center justify-center p-2 rounded-lg border ${
                     status === item.value

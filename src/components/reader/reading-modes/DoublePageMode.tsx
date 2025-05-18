@@ -11,7 +11,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
-import { MangaPage } from "@/types/manga";
+import { Page } from "@prisma/client";
 
 // Interface for the right-to-left changed event
 interface RightToLeftChangedEvent extends CustomEvent {
@@ -21,13 +21,11 @@ interface RightToLeftChangedEvent extends CustomEvent {
 }
 
 interface ReadingModeProps {
-  pages: MangaPage[];
+  pages: Page[];
   currentPage: number;
   settings: Settings;
   initialPage: number;
   onPageChange?: (page: number) => void;
-  manga: string;
-  volumeId: string;
   showControls?: boolean;
 }
 
@@ -36,8 +34,6 @@ const DoublePageMode = ({
   currentPage,
   settings,
   onPageChange,
-  manga,
-  volumeId,
   showControls = false,
 }: ReadingModeProps) => {
   // Ensure we're on an odd page for proper double page display
@@ -51,7 +47,7 @@ const DoublePageMode = ({
 
   // Replace state with refs where possible
   const [isReady, setIsReady] = useState(false);
-  const preloadedPagesRef = useRef<{ [key: number]: MangaPage }>({});
+  const preloadedPagesRef = useRef<{ [key: number]: Page }>({});
   const [isCropperOpen, setIsCropperOpen] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
   const [scale, setScale] = useState(1);
@@ -328,8 +324,6 @@ const DoublePageMode = ({
                           page={rightPage}
                           settings={settings}
                           pageNumber={rightPageIndex + 1}
-                          manga={manga}
-                          volumeId={volumeId}
                           onCropperStateChange={setIsCropperOpen}
                         />
                       </div>
@@ -343,8 +337,6 @@ const DoublePageMode = ({
                           page={leftPage}
                           settings={settings}
                           pageNumber={leftPageIndex + 1}
-                          manga={manga}
-                          volumeId={volumeId}
                           onCropperStateChange={setIsCropperOpen}
                         />
                       </div>
@@ -362,8 +354,6 @@ const DoublePageMode = ({
                           page={leftPage}
                           settings={settings}
                           pageNumber={leftPageIndex + 1}
-                          manga={manga}
-                          volumeId={volumeId}
                           onCropperStateChange={setIsCropperOpen}
                         />
                       </div>
@@ -377,8 +367,6 @@ const DoublePageMode = ({
                           page={rightPage}
                           settings={settings}
                           pageNumber={rightPageIndex + 1}
-                          manga={manga}
-                          volumeId={volumeId}
                           onCropperStateChange={setIsCropperOpen}
                         />
                       </div>

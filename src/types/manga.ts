@@ -67,3 +67,38 @@ export interface MangaMetadata {
   addedDate?: string;
   lastModified?: string;
 }
+
+/**
+ * Extended Collection type that includes mangaIds from CollectionManga relation
+ */
+export interface ExtendedCollection {
+  id: string;
+  name: string;
+  description: string | null;
+  coverImage: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  mangaIds: string[];
+}
+
+/**
+ * Extended UserMangaMetadata interface to include tagIds and collectionIds
+ */
+export interface ExtendedUserMangaMetadata {
+  id: string;
+  mangaId: string;
+  rating?: number | null;
+  progress?: number | null;
+  status?: string | null;
+  notes?: string | null;
+  favorite: boolean;
+  isNsfw: boolean;
+  customCover?: string | null;
+  author?: string | null;
+  artist?: string | null;
+  releaseYear?: number | null;
+  publisher?: string | null;
+  updatedAt: Date;
+  tagIds?: string[];
+  collectionIds?: string[];
+}

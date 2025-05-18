@@ -7,7 +7,7 @@ import { Suspense } from "react";
 import {
   searchMangaWithFilters,
   getAllMangaWithUserData,
-} from "@/actions/manga-management-actions";
+} from "@/actions/manga-management-prisma";
 
 interface MangaListPageProps {
   searchParams?: {

@@ -1,7 +1,8 @@
 "use server";
 
-import { createTag, getAllTags } from "@/actions/manga-management-actions";
-import { Tag } from "@/lib/database/DatabaseInterface";
+import { prisma } from "@/lib/prisma";
+import { createTag } from "@/actions/manga-management-prisma";
+import { Tag } from "@prisma/client";
 
 // Popular genres with colors
 const GENRES: Array<Omit<Tag, "id">> = [
@@ -59,7 +60,7 @@ export async function initializeTags(): Promise<{
   existing: number;
 }> {
   try {
-    const existingTags = await getAllTags();
+    const existingTags = await prisma.tag.findMany();
     const existingTagNames = new Set(
       existingTags.map((tag) => tag.name.toLowerCase())
     );
@@ -70,7 +71,11 @@ export async function initializeTags(): Promise<{
     for (const tag of allTags) {
       // Only create tags that don't exist
       if (!existingTagNames.has(tag.name.toLowerCase())) {
-        await createTag(tag);
+        await createTag({
+          name: tag.name,
+          color: tag.color || undefined,
+          type: tag.type as "content" | "genre" | "custom",
+        });
         created++;
       }
     }

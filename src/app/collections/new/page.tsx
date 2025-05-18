@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { createCollection } from "@/actions/manga-management-actions";
+import { createCollection } from "@/actions/manga-management-prisma";
 import { Upload, X, Image as ImageIcon } from "lucide-react";
 import Image from "next/image";
 

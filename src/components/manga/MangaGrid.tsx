@@ -1,12 +1,6 @@
 "use client";
 
 import { ReactNode, useState, useRef, useEffect, useMemo, memo } from "react";
-import { MangaMetadata } from "@/types/manga";
-import {
-  UserMangaMetadata,
-  Tag,
-  Collection,
-} from "@/lib/database/DatabaseInterface";
 import { MangaCard } from "./MangaCard";
 import { MangaLibraryFilters } from "./MangaLibraryFilters";
 import {
@@ -23,10 +17,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { Book } from "lucide-react";
 import {
-  getAllTags,
-  getAllCollections,
-} from "@/actions/manga-management-actions";
+  fetchTags,
+  fetchCollections,
+} from "@/actions/manga-management-api-prisma";
 import { formatDate } from "@/lib/utils";
+import { Collection, Tag } from "@prisma/client";
+import { MangaMetadata } from "@/types/manga";
+import { UserMangaMetadata } from "@prisma/client";
 
 interface MangaGridProps {
   mangaList: Array<MangaMetadata & { userData?: UserMangaMetadata | null }>;
@@ -60,8 +57,8 @@ export function MangaGrid({
       try {
         if (showFilters) {
           const [tagsData, collectionsData] = await Promise.all([
-            getAllTags(),
-            getAllCollections(),
+            fetchTags(),
+            fetchCollections(),
           ]);
           setTags(tagsData);
           setCollections(collectionsData);
@@ -213,6 +210,8 @@ function MangaGridContent({
       );
     } else {
       console.log(`Will render list view with ${sortedMangaList.length} manga`);
+
+      console.log(sortedMangaList[0].coverImage);
       return (
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 overflow-hidden divide-y divide-gray-100 dark:divide-gray-700">
           {sortedMangaList.map((manga) => (

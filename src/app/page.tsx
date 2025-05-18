@@ -8,7 +8,7 @@ import Link from "next/link";
 // import { MangaCard } from "@/components/manga/MangaCard";
 import { FileText, LayoutGrid } from "lucide-react";
 import { MangaGrid } from "@/components/manga/MangaGrid";
-import { getAllMangaWithUserData } from "@/actions/manga-management-actions";
+import { getAllMangaWithUserData } from "@/actions/manga-management-prisma";
 
 // Main content component
 // async function MangaContent() {

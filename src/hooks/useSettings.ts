@@ -5,7 +5,7 @@ import { toast } from "react-hot-toast";
 import {
   getSettings,
   updateSettings as updateSettingsAction,
-} from "@/lib/actions/settings-actions";
+} from "@/actions/settings-actions";
 
 // Reading modes similar to MangaDex
 export type ReadingMode = "singlePage" | "doublePage" | "longStrip";
@@ -86,7 +86,7 @@ export function useSettings() {
               hasCover: dbSettings.hasCover,
               showTooltips: dbSettings.showTooltips,
               ankiEnabled: dbSettings.ankiEnabled,
-              fontSize: dbSettings.fontSize,
+              fontSize: dbSettings.fontSize as number,
               readingMode: dbSettings.readingMode as ReadingMode,
               // New settings
               animatePageTurns:

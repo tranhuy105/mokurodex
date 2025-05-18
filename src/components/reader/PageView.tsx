@@ -6,18 +6,17 @@ import TextBoxes from "./TextBoxes";
 import ImageCropper from "./ImageCropper";
 import { updateLastCard, urlToWebp } from "@/lib/anki-connect";
 import { toast } from "react-hot-toast";
-import { createMangaImageUrl } from "@/lib/path-utils";
-import { MangaPage } from "@/types/manga";
 import { AlertCircle } from "lucide-react";
+import { Page, TextBlock as PrismaTextBlock } from "@prisma/client";
 
 interface PageViewProps {
-  page: MangaPage;
+  page: Page & {
+    textBlocks?: PrismaTextBlock[];
+  };
   settings: Settings;
   pageNumber: number;
   showPageNumber?: boolean;
   priority?: boolean;
-  manga?: string;
-  volumeId?: string;
   onCropperStateChange?: (isOpen: boolean) => void;
   mode?: "single" | "longStrip";
 }
@@ -33,6 +32,8 @@ interface ContextMenuProps {
 
 const ContextMenu = ({ x, y, image, onCrop, onClose }: ContextMenuProps) => {
   const [isLoading, setIsLoading] = useState(false);
+
+  console.log(image);
 
   // Handle sending full image to Anki
   const handleSendFullImage = async () => {
@@ -135,15 +136,14 @@ const PageView = memo(function PageView({
   page,
   settings,
   pageNumber,
-  manga,
-  volumeId,
   onCropperStateChange,
 }: PageViewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string>(page.image);
+  console.log(page);
+  const [imageUrl, setImageUrl] = useState<string>(page.imagePath);
   const [isCropperOpen, setIsCropperOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -207,52 +207,11 @@ const PageView = memo(function PageView({
 
   // Update image URL if manga and volumeId are provided
   useEffect(() => {
-    if (manga && volumeId && page.img_path) {
-      try {
-        // Extract the image path components
-        const pathParts = page.img_path.split("/");
-        if (pathParts.length >= 3) {
-          // We only need volumeName and imageName, first element (mangaName) is ignored
-          const [, volumeName, ...imageParts] = pathParts;
-          const imageName = imageParts.join("/");
+    // Simply use the imagePath directly as it's already correct
+    setImageUrl(page.imagePath);
+  }, [page.imagePath]);
 
-          // Create URL to the image
-          const url = createMangaImageUrl(manga, volumeName, imageName);
-
-          // Check if this is a webp file
-          const isWebP = url.toLowerCase().endsWith(".webp");
-
-          // Log information about the image being loaded
-          console.log(`Loading image: ${url}, WebP: ${isWebP}`);
-
-          // Test if browser supports webp
-          if (isWebP) {
-            const testWebP = (callback: (supported: boolean) => void) => {
-              const webP = new Image();
-              webP.onload = () => callback(true);
-              webP.onerror = () => callback(false);
-              webP.src =
-                "data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==";
-            };
-
-            testWebP((supported) => {
-              console.log(`WebP support: ${supported}`);
-              // Even if not supported, we'll try loading anyway as the browser may have polyfills
-            });
-          }
-
-          setImageUrl(url);
-        }
-      } catch (error) {
-        console.error("Error constructing image URL:", error);
-        setImageError(true);
-        setIsLoading(false);
-      }
-    } else if (page.image) {
-      // If no manga/volumeId provided, use the default image URL from the page object
-      setImageUrl(page.image);
-    }
-  }, [manga, volumeId, page.img_path, page.image]);
+  console.log(imageUrl);
 
   // Function to retry loading image on error
   const retryLoadImage = () => {
@@ -328,7 +287,7 @@ const PageView = memo(function PageView({
   // Calculate proper dimensions to avoid black bars for wide/double page spreads
   const getOptimalDimensions = () => {
     // Check if this is a wide/double page image
-    const isWideImage = page.img_width > page.img_height * 1.5;
+    const isWideImage = page.width > page.height * 1.5;
 
     // Get actual viewport dimensions only once
     const viewportWidth =
@@ -340,16 +299,16 @@ const PageView = memo(function PageView({
       // Mobile: always use full width
       return {
         width: "100%",
-        height: `calc(100vw * ${page.img_height / page.img_width})`,
+        height: `calc(100vw * ${page.height / page.width})`,
         maxWidth: "100%",
       };
     } else {
       // Desktop: fit to container while keeping aspect ratio
       if (isWideImage) {
         // For wide images (spreads), calculate dimensions based on viewport constraints
-        const maxWidth = Math.min(page.img_width, viewportWidth * 0.95);
-        const scaleFactor = maxWidth / page.img_width;
-        const scaledHeight = page.img_height * scaleFactor;
+        const maxWidth = Math.min(page.width, viewportWidth * 0.95);
+        const scaleFactor = maxWidth / page.width;
+        const scaledHeight = page.height * scaleFactor;
 
         // If scaled height exceeds viewport, scale down further
         if (scaledHeight > viewportHeight) {
@@ -370,9 +329,9 @@ const PageView = memo(function PageView({
         };
       } else {
         // For normal images, use original dimensions with maxWidth constraint
-        const maxWidth = Math.min(page.img_width, viewportWidth * 0.95);
-        const scaleFactor = maxWidth / page.img_width;
-        const scaledHeight = page.img_height * scaleFactor;
+        const maxWidth = Math.min(page.width, viewportWidth * 0.95);
+        const scaleFactor = maxWidth / page.width;
+        const scaledHeight = page.height * scaleFactor;
 
         return {
           width: `${maxWidth}px`,
@@ -482,7 +441,7 @@ const PageView = memo(function PageView({
           <div
             className="flex items-center justify-center bg-gray-800 w-full"
             style={{
-              aspectRatio: `${page.img_width} / ${page.img_height}`,
+              aspectRatio: `${page.width} / ${page.height}`,
             }}
           >
             <div className="animate-pulse flex flex-col items-center">
@@ -510,7 +469,7 @@ const PageView = memo(function PageView({
               className="select-none transition-opacity duration-300 relative"
               style={{
                 ...getOptimalDimensions(),
-                aspectRatio: `${page.img_width} / ${page.img_height}`,
+                aspectRatio: `${page.width} / ${page.height}`,
                 backgroundColor: settings.darkMode ? "#000" : "#fff",
                 boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
                 userSelect: "none",
@@ -542,10 +501,10 @@ const PageView = memo(function PageView({
             {/* TextBoxes overlay */}
             {settings.showTooltips !== false && (
               <TextBoxes
-                blocks={page.blocks || []}
+                blocks={page.textBlocks || []}
                 settings={settings}
-                imgWidth={page.img_width}
-                imgHeight={page.img_height}
+                imgWidth={page.width}
+                imgHeight={page.height}
               />
             )}
           </div>
@@ -556,7 +515,7 @@ const PageView = memo(function PageView({
           <div
             className="flex items-center justify-center bg-gray-800 w-full"
             style={{
-              aspectRatio: `${page.img_width} / ${page.img_height}`,
+              aspectRatio: `${page.width} / ${page.height}`,
             }}
           >
             <div className="text-center p-4">

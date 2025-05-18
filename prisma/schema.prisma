@@ -1,0 +1,202 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../data/manga-management.db"
+}
+
+// Manga model
+model Manga {
+  id            String   @id
+  title         String
+  volumes       Int      @default(0)
+  coverImage    String?
+  addedDate     DateTime
+  lastModified  DateTime
+  directoryPath String
+  lastScanned   DateTime
+  scanStatus    String   @default("pending")
+  errorMessage  String?
+
+  // Relations
+  mangaVolumes      Volume[]
+  userData          UserMangaMetadata?
+  readingHistory    ReadingHistory[]
+  mangaTags         MangaTag[]
+  collectionManga   CollectionManga[]
+}
+
+// Volume model
+model Volume {
+  id            String   @id
+  mangaId       String
+  volumeNumber  Int
+  volumeTitle   String
+  filePath      String
+  coverImage    String?
+  pageCount     Int      @default(0)
+  addedDate     DateTime
+  lastModified  DateTime
+  volumeUuid    String
+  previewImages String?  // JSON array of preview image paths
+
+  // Relations
+  manga           Manga             @relation(fields: [mangaId], references: [id], onDelete: Cascade)
+  readingHistory  ReadingHistory[]
+  pages           Page[]
+
+  @@index([mangaId])
+}
+
+// Page model - represents a single page in a volume
+model Page {
+  id          String   @id @default(cuid())
+  volumeId    String
+  pageNumber  Int
+  imagePath   String
+  width       Int
+  height      Int
+  
+  // Relations
+  volume      Volume    @relation(fields: [volumeId], references: [id], onDelete: Cascade)
+  textBlocks  TextBlock[]
+  
+  @@unique([volumeId, pageNumber])
+  @@index([volumeId])
+}
+
+// TextBlock model - represents text on a page
+model TextBlock {
+  id          String   @id @default(cuid())
+  pageId      String
+  boxX        Float
+  boxY        Float
+  boxWidth    Float
+  boxHeight   Float
+  text        String   // JSON array of lines
+  fontSize    Float
+  isVertical  Boolean  @default(false)
+  linesCoords String?  // JSON array of line coordinates
+  
+  // Relations
+  page        Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  
+  @@index([pageId])
+}
+
+// Tag model
+model Tag {
+  id    String @id
+  name  String
+  color String?
+  type  String // "genre" | "content" | "custom"
+
+  // Relations
+  mangaTags MangaTag[]
+}
+
+// Collection model
+model Collection {
+  id          String   @id
+  name        String
+  description String?
+  coverImage  String?
+  createdAt   DateTime
+  updatedAt   DateTime
+
+  // Relations
+  collectionManga CollectionManga[]
+}
+
+// MangaTag join model
+model MangaTag {
+  mangaId String
+  tagId   String
+
+  // Relations
+  manga Manga @relation(fields: [mangaId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([mangaId, tagId])
+  @@index([mangaId])
+  @@index([tagId])
+}
+
+// CollectionManga join model
+model CollectionManga {
+  collectionId String
+  mangaId      String
+
+  // Relations
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  manga      Manga      @relation(fields: [mangaId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, mangaId])
+  @@index([collectionId])
+  @@index([mangaId])
+}
+
+// UserMangaMetadata model
+model UserMangaMetadata {
+  id           String   @id
+  mangaId      String   @unique
+  rating       Float?
+  progress     Int?
+  status       String?  // "reading" | "completed" | "on-hold" | "dropped" | "plan-to-read"
+  notes        String?
+  favorite     Boolean  @default(false)
+  isNsfw       Boolean  @default(false)
+  customCover  String?
+  author       String?
+  artist       String?
+  releaseYear  Int?
+  publisher    String?
+  updatedAt    DateTime
+
+  // Relations
+  manga Manga @relation(fields: [mangaId], references: [id], onDelete: Cascade)
+}
+
+// ReadingHistory model
+model ReadingHistory {
+  id        String   @id
+  mangaId   String
+  volumeId  String
+  page      Int
+  timestamp DateTime
+
+  // Relations
+  manga  Manga  @relation(fields: [mangaId], references: [id], onDelete: Cascade)
+  volume Volume @relation(fields: [volumeId], references: [id], onDelete: Cascade)
+
+  @@index([mangaId])
+  @@index([volumeId])
+}
+
+// Settings model
+model Settings {
+  id                  String   @id
+  darkMode            Boolean  @default(true)
+  invertColors        Boolean  @default(false)
+  rightToLeft         Boolean  @default(false)
+  hasCover            Boolean  @default(false)
+  showTooltips        Boolean  @default(true)
+  ankiEnabled         Boolean  @default(true)
+  fontSize            String   @default("auto") // "auto" or number as string
+  readingMode         String   @default("singlePage") // "singlePage" | "doublePage" | "longStrip"
+  animatePageTurns    Boolean  @default(true)
+  highlightColor      String   @default("#FFD700")
+  readerBackground    String   @default("#FFFFFF")
+  pageMargin          Int      @default(20)
+  furiganaDisplay     String   @default("hover") // "always" | "hover" | "never"
+  autoSavePosition    Boolean  @default(true)
+  dictionaryProvider  String   @default("jisho") // "jisho" | "google" | "custom"
+  customDictionaryUrl String?
+  pageNavigationMethod String   @default("click") // "click" | "tap" | "swipe" | "arrows"
+  updatedAt           DateTime
+} 

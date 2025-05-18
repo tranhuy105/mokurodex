@@ -1,13 +1,16 @@
 import MangaReader from "@/components/reader/MangaReader";
 import { MangaReaderSkeleton } from "@/components/reader/MangaReaderSkeleton";
 import { notFound } from "next/navigation";
-import { fetchMangaVolumes, fetchVolumePages } from "@/actions/manga-api";
+import {
+  fetchMangaWithVolumes,
+  fetchVolumePages,
+} from "@/actions/manga-api-prisma";
 import { Suspense } from "react";
 import { decodeUrlParam } from "@/lib/path-utils";
 
 interface PageProps {
   params: {
-    manga: string;
+    mangaId: string;
     volume: string;
     page: string;
   };
@@ -58,22 +61,21 @@ function ErrorDisplay({
 }
 
 // Reader content component
-async function ReaderContent({ manga, volume, page }: PageProps["params"]) {
+async function ReaderContent({ mangaId, volume, page }: PageProps["params"]) {
   try {
-    const debugInfo: Partial<DebugInfo> = { manga, volume, page };
+    const debugInfo: Partial<DebugInfo> = { mangaId, volume, page };
 
     // Get manga volumes using the client-safe API
-    const volumes = await fetchMangaVolumes(manga);
+    const mangaWithVolumes = await fetchMangaWithVolumes(mangaId);
+    const volumes = mangaWithVolumes?.mangaVolumes || [];
     debugInfo.volumeIds = volumes.map((v) => ({
-      name: v.mokuroData.volume,
-      uuid: v.mokuroData.volume_uuid,
-      pageCount: v.metadata?.pageCount || 0,
+      name: v.volumeTitle,
+      uuid: v.volumeUuid,
+      pageCount: v.pageCount,
     }));
 
     // Find the current volume
-    const currentVolume = volumes.find(
-      (v) => v.mokuroData.volume_uuid === volume
-    );
+    const currentVolume = volumes.find((v) => v.volumeUuid === volume);
 
     if (!currentVolume) {
       return (
@@ -86,13 +88,13 @@ async function ReaderContent({ manga, volume, page }: PageProps["params"]) {
 
     // Store current volume info for debugging
     debugInfo.currentVolume = {
-      name: currentVolume.mokuroData.volume,
-      uuid: currentVolume.mokuroData.volume_uuid,
-      pageCount: currentVolume.metadata?.pageCount || 0,
+      name: currentVolume.volumeTitle,
+      uuid: currentVolume.volumeUuid,
+      pageCount: currentVolume.pageCount,
     };
 
     // Get pages for the current volume
-    const pages = await fetchVolumePages(manga, currentVolume);
+    const pages = await fetchVolumePages(currentVolume.volumeUuid);
 
     // Double-check that pages were loaded successfully
     if (!pages || pages.length === 0) {
@@ -100,7 +102,7 @@ async function ReaderContent({ manga, volume, page }: PageProps["params"]) {
         <ErrorDisplay
           error={
             new Error(
-              `Failed to load pages for volume: ${currentVolume.mokuroData.volume}`
+              `Failed to load pages for volume: ${currentVolume.volumeTitle}`
             )
           }
           details={{
@@ -133,7 +135,7 @@ async function ReaderContent({ manga, volume, page }: PageProps["params"]) {
 
     return (
       <MangaReader
-        manga={manga}
+        manga={mangaId}
         volume={currentVolume}
         pages={pages}
         volumes={volumes}
@@ -149,7 +151,7 @@ async function ReaderContent({ manga, volume, page }: PageProps["params"]) {
             : new Error(`Error loading manga: ${String(error)}`)
         }
         details={{
-          manga,
+          mangaId,
           volume,
           page,
           error: String(error),
@@ -164,14 +166,14 @@ export default async function ReaderPage({ params }: PageProps) {
   try {
     // Await the params object before destructuring
     const paramsResolved = await params;
-    const { manga: encodedManga, volume, page } = paramsResolved;
+    const { mangaId: encodedManga, volume, page } = paramsResolved;
 
     // Ensure the manga ID is properly decoded
-    const manga = decodeUrlParam(encodedManga);
+    const mangaId = decodeUrlParam(encodedManga);
 
     return (
       <Suspense fallback={<MangaReaderSkeleton />}>
-        <ReaderContent manga={manga} volume={volume} page={page} />
+        <ReaderContent mangaId={mangaId} volume={volume} page={page} />
       </Suspense>
     );
   } catch (error) {

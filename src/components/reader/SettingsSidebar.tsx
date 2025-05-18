@@ -14,7 +14,7 @@ import {
 import { useSettings } from "@/hooks/useSettings";
 import { toast } from "react-hot-toast";
 import { useState, useEffect } from "react";
-import { Volume } from "@/types/manga";
+import { Volume } from "@prisma/client";
 
 interface SettingsSidebarProps {
   onClose: () => void;
@@ -389,22 +389,18 @@ export default function SettingsSidebar({
                         onClick={() => {
                           if (!currentVolume || volumes.length <= 1) return;
                           const currentIndex = volumes.findIndex(
-                            (vol) =>
-                              vol.mokuroData.volume_uuid ===
-                              currentVolume.mokuroData.volume_uuid
+                            (vol) => vol.volumeUuid === currentVolume.volumeUuid
                           );
                           if (currentIndex > 0) {
                             handleVolumeChange(
-                              volumes[currentIndex - 1].mokuroData.volume_uuid
+                              volumes[currentIndex - 1].volumeUuid
                             );
                           }
                         }}
                         disabled={
                           !currentVolume ||
                           volumes.findIndex(
-                            (vol) =>
-                              vol.mokuroData.volume_uuid ===
-                              currentVolume.mokuroData.volume_uuid
+                            (vol) => vol.volumeUuid === currentVolume.volumeUuid
                           ) <= 0
                         }
                         className="w-8 h-8 flex items-center justify-center text-gray-300 bg-gray-800 hover:bg-gray-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
@@ -415,17 +411,13 @@ export default function SettingsSidebar({
 
                       <div className="relative flex-1 mx-2">
                         <select
-                          value={currentVolume?.mokuroData.volume_uuid}
+                          value={currentVolume?.volumeUuid}
                           onChange={(e) => handleVolumeChange(e.target.value)}
                           className="w-full bg-gray-800 text-white rounded-md px-2 py-1 text-sm h-8 border border-gray-600 focus:border-orange-500 focus:outline-none appearance-none"
                         >
                           {volumes.map((vol) => (
-                            <option
-                              key={vol.mokuroData.volume_uuid}
-                              value={vol.mokuroData.volume_uuid}
-                            >
-                              {vol.mokuroData.volume ||
-                                `Volume ${vol.mokuroData.volume_uuid}`}
+                            <option key={vol.volumeUuid} value={vol.volumeUuid}>
+                              {vol.volumeTitle || `Volume ${vol.volumeUuid}`}
                             </option>
                           ))}
                         </select>
@@ -436,22 +428,18 @@ export default function SettingsSidebar({
                         onClick={() => {
                           if (!currentVolume || volumes.length <= 1) return;
                           const currentIndex = volumes.findIndex(
-                            (vol) =>
-                              vol.mokuroData.volume_uuid ===
-                              currentVolume.mokuroData.volume_uuid
+                            (vol) => vol.volumeUuid === currentVolume.volumeUuid
                           );
                           if (currentIndex < volumes.length - 1) {
                             handleVolumeChange(
-                              volumes[currentIndex + 1].mokuroData.volume_uuid
+                              volumes[currentIndex + 1].volumeUuid
                             );
                           }
                         }}
                         disabled={
                           !currentVolume ||
                           volumes.findIndex(
-                            (vol) =>
-                              vol.mokuroData.volume_uuid ===
-                              currentVolume.mokuroData.volume_uuid
+                            (vol) => vol.volumeUuid === currentVolume.volumeUuid
                           ) >=
                             volumes.length - 1
                         }

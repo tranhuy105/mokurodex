@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { ChevronUp, Settings2, Home, List } from "lucide-react";
 import SettingsSidebar from "./SettingsSidebar";
 import { useSettings, useMangaReader, useReaderControls } from "@/hooks";
-import { MangaPage, Volume } from "@/types/manga";
 import Link from "next/link";
 
 // Import reading modes components
@@ -12,11 +11,12 @@ import SinglePageMode from "./reading-modes/SinglePageMode";
 import DoublePageMode from "./reading-modes/DoublePageMode";
 import LongStripMode from "./reading-modes/LongStripMode";
 import ProgressBar from "./ProgressBar";
+import { Page, Volume } from "@prisma/client";
 
 interface Props {
   manga: string;
   volume: Volume;
-  pages: MangaPage[];
+  pages: Page[];
   volumes: Volume[];
   initialPage: number;
 }
@@ -55,7 +55,7 @@ export default function MangaReader({
 
   // Calculate actual page count to use when pages is empty
   const actualPageCount = useMemo(() => {
-    return currentPages.length || currentVolume.metadata?.pageCount || 0;
+    return currentPages.length || currentVolume.pageCount || 0;
   }, [currentPages, currentVolume]);
 
   // Memoize the page data to prevent unnecessary re-renders
@@ -78,7 +78,7 @@ export default function MangaReader({
       initialPage,
       onPageChange: navigateToPage,
       manga,
-      volumeId: currentVolume.mokuroData.volume_uuid,
+      volumeId: currentVolume.volumeUuid,
       showControls,
     };
 

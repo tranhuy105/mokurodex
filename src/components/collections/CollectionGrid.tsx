@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Collection } from "@/lib/database/DatabaseInterface";
+import { Collection } from "@prisma/client";
 import { CollectionCard } from "./CollectionCard";
 import { Plus } from "lucide-react";
 import Link from "next/link";

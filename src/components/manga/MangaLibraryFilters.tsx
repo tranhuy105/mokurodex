@@ -20,7 +20,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Tag, Collection } from "@/lib/database/DatabaseInterface";
+import { Tag, Collection } from "@prisma/client";
 import { Skeleton } from "../ui/Skeleton";
 
 interface MangaLibraryFiltersProps {
