@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
-import { ChevronUp, Settings2, Home, List } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronUp, Settings2, Home, List, Layers } from "lucide-react";
 import SettingsSidebar from "./SettingsSidebar";
 import { useSettings, useMangaReader, useReaderControls } from "@/hooks";
 import Link from "next/link";
+import ImageCropper from "./ImageCropper";
+import { updateLastCard } from "@/lib/anki-connect";
 
 // Import reading modes components
 import SinglePageMode from "./reading-modes/SinglePageMode";
@@ -12,6 +14,13 @@ import DoublePageMode from "./reading-modes/DoublePageMode";
 import LongStripMode from "./reading-modes/LongStripMode";
 import ProgressBar from "./ProgressBar";
 import { Page, Volume } from "@prisma/client";
+
+// Define a type for double page data
+type DoublePageData = {
+  left: string | null;
+  right: string | null;
+  currentPage: number;
+};
 
 interface Props {
   manga: string;
@@ -67,6 +76,85 @@ export default function MangaReader({
       top: 0,
       behavior: "smooth",
     });
+  };
+
+  // Add state for image cropper
+  const [isCropperOpen, setIsCropperOpen] = useState(false);
+  const [pageToDisplay, setPageToDisplay] = useState<string | null>(null);
+
+  // Get current page image and potentially second page image for double page mode
+  const getCurrentPageImage = (): string | DoublePageData | null => {
+    if (
+      !currentPages.length ||
+      currentPage <= 0 ||
+      currentPage > currentPages.length
+    ) {
+      return null;
+    }
+
+    // For single page mode or long strip mode, just return the current page
+    if (settings.readingMode !== "doublePage") {
+      return currentPages[currentPage - 1]?.imagePath || "";
+    }
+
+    // For double page mode, return both images if available
+    // Use the same logic as DoublePageMode to ensure correct pages are shown
+    const adjustedCurrentPage =
+      currentPage % 2 === 0 && currentPage > 1 ? currentPage - 1 : currentPage;
+
+    const leftPageIndex = adjustedCurrentPage - 1;
+    const rightPageIndex = adjustedCurrentPage;
+
+    const leftPage = currentPages[leftPageIndex];
+    const rightPage = currentPages[rightPageIndex];
+
+    return {
+      left: leftPage?.imagePath || null,
+      right: rightPage?.imagePath || null,
+      currentPage: adjustedCurrentPage,
+    };
+  };
+
+  // Handle opening the cropper
+  const handleOpenCropper = () => {
+    const pageImage = getCurrentPageImage();
+
+    if (!pageImage) {
+      return; // No pages available
+    }
+
+    // Handle double page mode differently
+    if (
+      settings.readingMode === "doublePage" &&
+      typeof pageImage === "object"
+    ) {
+      // For double page mode, we'll default to the currently visible page
+      // If both pages are available, let the user choose in the cropper
+      if (pageImage.left && pageImage.right) {
+        // Default to right page for right-to-left, left page for left-to-right
+        setPageToDisplay(
+          settings.rightToLeft ? pageImage.right : pageImage.left
+        );
+      } else {
+        // If only one page is available, use that
+        setPageToDisplay(pageImage.left || pageImage.right || null);
+      }
+    } else {
+      // For single page modes, just use the current page
+      setPageToDisplay(typeof pageImage === "string" ? pageImage : null);
+    }
+
+    setIsCropperOpen(true);
+  };
+
+  // Handle cropping
+  const handleCrop = async (croppedImage: string) => {
+    try {
+      await updateLastCard(croppedImage);
+      setIsCropperOpen(false);
+    } catch (error) {
+      console.error("Error updating Anki card:", error);
+    }
   };
 
   // Render the appropriate content based on reading mode
@@ -147,6 +235,13 @@ export default function MangaReader({
           >
             <List size={18} />
           </Link>
+          <button
+            onClick={handleOpenCropper}
+            className="flex items-center justify-center w-10 h-10 bg-[#fa9c34] bg-opacity-90 hover:bg-opacity-100 text-white rounded-full shadow-lg transition-all"
+            aria-label="Open Anki Cropper"
+          >
+            <Layers size={18} />
+          </button>
         </div>
       </div>
 
@@ -179,6 +274,23 @@ export default function MangaReader({
         >
           <ChevronUp size={22} />
         </button>
+      )}
+
+      {/* Image Cropper with Page Selection */}
+      {isCropperOpen && pageToDisplay && (
+        <ImageCropper
+          isOpen={isCropperOpen}
+          onClose={() => setIsCropperOpen(false)}
+          image={pageToDisplay}
+          onCrop={handleCrop}
+          doublePage={settings.readingMode === "doublePage"}
+          currentPages={
+            settings.readingMode === "doublePage"
+              ? (getCurrentPageImage() as DoublePageData | null)
+              : null
+          }
+          onChangePage={(page: string) => setPageToDisplay(page)}
+        />
       )}
     </div>
   );

@@ -40,10 +40,12 @@ const LongStripMode = ({
   const isManuallyScrolling = useRef<boolean>(false);
   const isUpdatingPage = useRef<boolean>(false);
   const lastScrollTop = useRef<number>(0);
+  const scrollStabilityCounter = useRef<number>(0);
+  const lastScrollDirection = useRef<string | null>(null);
 
   // Timing control for stability
   const lastPageChangeTimestamp = useRef<number>(Date.now());
-  const CHANGE_COOLDOWN = 600; // ms between allowed page changes
+  const CHANGE_COOLDOWN = 800; // Increase cooldown to prevent rapid page changes
 
   // Handle ref cleanup properly on unmount
   useEffect(() => {
@@ -111,11 +113,33 @@ const LongStripMode = ({
         const scrollTop = container.scrollTop;
         const scrollDirection =
           scrollTop > lastScrollTop.current ? "down" : "up";
+
+        // Check if scroll direction changed
+        const directionChanged =
+          lastScrollDirection.current !== null &&
+          lastScrollDirection.current !== scrollDirection;
+
+        // Update last direction
+        lastScrollDirection.current = scrollDirection;
+
+        // Reset stability counter if direction changed
+        if (directionChanged) {
+          scrollStabilityCounter.current = 0;
+        } else {
+          // Increment stability counter when scrolling in same direction
+          scrollStabilityCounter.current++;
+        }
+
+        // Store last scroll position
         lastScrollTop.current = scrollTop;
 
         // Return early if we recently changed pages (cooling down)
         const now = Date.now();
         if (now - lastPageChangeTimestamp.current < CHANGE_COOLDOWN) return;
+
+        // Only process scroll events after some stability in the same direction
+        // to prevent random jumps during fast scrolling
+        if (scrollStabilityCounter.current < 2) return;
 
         // Find all visible pages and their visibility percentages
         const visiblePages = new Map<number, number>();
@@ -152,28 +176,37 @@ const LongStripMode = ({
         // Determine if page change is needed based on stable criteria
         let shouldChangePage = false;
 
-        // Case 1: Current page not visible at all
-        if (currentPageVisibility === 0 && highestVisibility > 0.3) {
+        // Case 1: Current page not visible at all and new page is significantly visible
+        if (currentPageVisibility === 0 && highestVisibility > 0.4) {
           shouldChangePage = true;
         }
         // Case 2: New page is significantly more visible
-        else if (highestVisibility > currentPageVisibility + 0.25) {
+        else if (highestVisibility > currentPageVisibility + 0.35) {
           shouldChangePage = true;
         }
         // Case 3: Direction-based changes with strong visibility
         else if (
           (scrollDirection === "down" &&
             mostVisiblePage > activePageRef.current &&
-            highestVisibility > 0.4) ||
+            highestVisibility > 0.5) ||
           (scrollDirection === "up" &&
             mostVisiblePage < activePageRef.current &&
-            highestVisibility > 0.4)
+            highestVisibility > 0.5)
         ) {
           shouldChangePage = true;
         }
 
         // Apply page change if needed
         if (shouldChangePage && mostVisiblePage !== activePageRef.current) {
+          // Prevent page changes that are too far from current page
+          // This helps prevent random jumps
+          if (Math.abs(mostVisiblePage - activePageRef.current) > 2) {
+            // For large jumps, be more conservative
+            if (highestVisibility < 0.7) {
+              return;
+            }
+          }
+
           changePage(mostVisiblePage, true);
 
           // Update virtualization window - conservative range
@@ -192,7 +225,7 @@ const LongStripMode = ({
         // Handle errors gracefully
         console.error("Error in scroll handler:", error);
       }
-    }, 120); // Conservative throttle
+    }, 150); // Increase throttle delay for more stability
   }, [changePage, pages.length, visibleRange]);
 
   // Attach scroll event listener
@@ -232,7 +265,8 @@ const LongStripMode = ({
         changePage(pageNumber, false);
 
         // Calculate scroll position with offset for better viewing
-        const targetPosition = targetElement.offsetTop - 60;
+        // Use a smaller offset for more precise positioning
+        const targetPosition = targetElement.offsetTop - 40;
 
         // Perform the scroll
         container.scrollTo({
@@ -249,10 +283,13 @@ const LongStripMode = ({
         return false;
       } finally {
         // Reset flags after scroll animation completes with appropriate timing
-        const delay = behavior === "smooth" ? 800 : 200;
+        const delay = behavior === "smooth" ? 800 : 300;
         setTimeout(() => {
           isManuallyScrolling.current = false;
           isInitialized.current = true;
+
+          // Reset scroll stability counter
+          scrollStabilityCounter.current = 0;
 
           // Update URL after manual scroll completes
           if (onPageChange && pageNumber !== currentPage) {
@@ -373,6 +410,7 @@ const LongStripMode = ({
     <div
       ref={containerRef}
       className="h-full w-full overflow-y-auto overflow-x-hidden bg-gray-900 scrollbar-hide"
+      style={{ scrollBehavior: "auto" }} // Prevent browser smooth scrolling to avoid conflicts
     >
       <div className="min-h-full w-full flex flex-col items-center justify-start">
         {renderedPages}

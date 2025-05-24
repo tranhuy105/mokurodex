@@ -56,6 +56,8 @@ const DoublePageMode = ({
   // Use a ref instead of state for force rerender
   const forceRerenderRef = useRef(0);
   const isMountedRef = useRef(true);
+  // Track if TextBoxes should be visible
+  const [showTextBoxes, setShowTextBoxes] = useState(true);
 
   // Create a state with update function stored in ref to avoid linter errors
   const [, setDummy] = useState({});
@@ -202,6 +204,12 @@ const DoublePageMode = ({
       if (transformRef.current && transformRef.current.resetTransform) {
         // @ts-expect-error - Method is available but not properly typed in the library
         transformRef.current.resetTransform();
+        // Reset zoom state
+        if (isMountedRef.current) {
+          setIsZoomed(false);
+          setScale(1);
+          setShowTextBoxes(true);
+        }
       }
     };
 
@@ -281,8 +289,22 @@ const DoublePageMode = ({
         }}
         onTransformed={(ref) => {
           if (isMountedRef.current) {
-            setIsZoomed(ref.state.scale > 1.01);
-            setScale(ref.state.scale);
+            const newScale = ref.state.scale;
+            const wasZoomed = isZoomed;
+            setIsZoomed(newScale > 1.01);
+            setScale(newScale);
+
+            // Toggle TextBoxes visibility based on zoom state
+            if (newScale > 1.01 && !wasZoomed) {
+              setShowTextBoxes(false);
+            } else if (newScale <= 1.01 && wasZoomed) {
+              // Small delay to let transform complete before showing TextBoxes
+              setTimeout(() => {
+                if (isMountedRef.current) {
+                  setShowTextBoxes(true);
+                }
+              }, 300);
+            }
           }
         }}
         ref={transformRef}
@@ -322,7 +344,11 @@ const DoublePageMode = ({
                             forceRerenderRef.current
                           }`}
                           page={rightPage}
-                          settings={settings}
+                          settings={{
+                            ...settings,
+                            showTooltips:
+                              showTextBoxes && settings.showTooltips,
+                          }}
                           pageNumber={rightPageIndex + 1}
                           onCropperStateChange={setIsCropperOpen}
                         />
@@ -335,7 +361,11 @@ const DoublePageMode = ({
                             forceRerenderRef.current
                           }`}
                           page={leftPage}
-                          settings={settings}
+                          settings={{
+                            ...settings,
+                            showTooltips:
+                              showTextBoxes && settings.showTooltips,
+                          }}
                           pageNumber={leftPageIndex + 1}
                           onCropperStateChange={setIsCropperOpen}
                         />
@@ -352,7 +382,11 @@ const DoublePageMode = ({
                             forceRerenderRef.current
                           }`}
                           page={leftPage}
-                          settings={settings}
+                          settings={{
+                            ...settings,
+                            showTooltips:
+                              showTextBoxes && settings.showTooltips,
+                          }}
                           pageNumber={leftPageIndex + 1}
                           onCropperStateChange={setIsCropperOpen}
                         />
@@ -365,7 +399,11 @@ const DoublePageMode = ({
                             forceRerenderRef.current
                           }`}
                           page={rightPage}
-                          settings={settings}
+                          settings={{
+                            ...settings,
+                            showTooltips:
+                              showTextBoxes && settings.showTooltips,
+                          }}
                           pageNumber={rightPageIndex + 1}
                           onCropperStateChange={setIsCropperOpen}
                         />

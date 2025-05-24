@@ -10,15 +10,25 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { getCroppedImg, type Pixels } from "@/lib/anki-connect";
+import { getCroppedImg, urlToWebp, type Pixels } from "@/lib/anki-connect";
 import { toast } from "react-hot-toast";
-import { Scissors } from "lucide-react";
+import { Scissors, Info, ChevronLeft, ChevronRight } from "lucide-react";
+
+// Define types for double page mode
+type DoublePageData = {
+  left: string | null;
+  right: string | null;
+  currentPage: number;
+};
 
 interface ImageCropperProps {
   isOpen: boolean;
   onClose: () => void;
   image: string;
   onCrop: (croppedImage: string) => void;
+  doublePage?: boolean;
+  currentPages?: DoublePageData | null;
+  onChangePage?: (page: string) => void;
 }
 
 export default function ImageCropper({
@@ -26,6 +36,9 @@ export default function ImageCropper({
   onClose,
   image,
   onCrop,
+  doublePage = false,
+  currentPages = null,
+  onChangePage,
 }: ImageCropperProps) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -33,6 +46,18 @@ export default function ImageCropper({
     null
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Check if device is mobile
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    checkIfMobile();
+    window.addEventListener("resize", checkIfMobile);
+    return () => window.removeEventListener("resize", checkIfMobile);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -74,8 +99,42 @@ export default function ImageCropper({
     }
   };
 
-  const handleClose = () => {
-    onClose();
+  // Handle sending the whole image
+  const handleSendFullImage = async () => {
+    setIsLoading(true);
+    try {
+      const confirmed = window.confirm(
+        "Add the full image to the last created Anki card?"
+      );
+      if (confirmed) {
+        toast.loading("Converting and sending image to Anki...", {
+          duration: 5000,
+        });
+        const webpImage = await urlToWebp(image);
+        if (webpImage) {
+          onCrop(webpImage);
+        } else {
+          throw new Error("Failed to convert image to WebP");
+        }
+      }
+    } catch (e) {
+      console.error("Error sending full image:", e);
+      toast.error("Failed to send image to Anki");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle page navigation in double page mode
+  const handleChangePage = (newImage: string) => {
+    // Reset crop and zoom when changing pages
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
+
+    if (onChangePage) {
+      onChangePage(newImage);
+    }
   };
 
   // Stop propagation of events to prevent page navigation
@@ -84,43 +143,94 @@ export default function ImageCropper({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent
-        className="max-w-3xl bg-gray-900 border-gray-700"
+        className="max-w-[95vw] md:max-w-[85vw] lg:max-w-3xl bg-[#2a2a2a] border-[#3a3a3a] p-3 md:p-4 shadow-xl"
         onClick={handleDialogClick}
       >
-        <DialogHeader>
-          <DialogTitle className="text-white text-xl flex items-center gap-2">
-            <Scissors className="text-orange-400" size={20} />
+        <DialogHeader className="mb-2">
+          <DialogTitle className="text-[#fa9c34] text-lg md:text-xl flex items-center gap-2 font-medium">
+            <Scissors className="h-5 w-5" />
             Crop Image for Anki
           </DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="text-sm text-gray-400 bg-gray-800 p-3 rounded-md border border-gray-700">
-            <div className="flex items-center text-orange-400 font-medium mb-2">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="mr-2"
-              >
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-              Instructions
-            </div>
-            <p className="ml-6 mb-1">• Drag the crop area to position it</p>
-            <p className="ml-6 mb-1">• Use mouse wheel or pinch to zoom</p>
-            <p className="ml-6">• Press ESC or click Cancel to exit</p>
+
+        <div className="flex flex-col gap-3">
+          {/* Double page selector */}
+          {doublePage &&
+            currentPages &&
+            (currentPages.left || currentPages.right) && (
+              <div className="flex justify-center items-center gap-2 bg-[#222] p-2 rounded border border-[#3a3a3a]">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`h-8 px-3 ${
+                    currentPages.left && image === currentPages.left
+                      ? "bg-[#fa9c34] text-white border-[#fa9c34]"
+                      : "bg-[#3a3a3a] border-[#4a4a4a] text-gray-300"
+                  } ${
+                    !currentPages.left
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-[#4a4a4a]"
+                  }`}
+                  onClick={() =>
+                    currentPages.left && handleChangePage(currentPages.left)
+                  }
+                  disabled={!currentPages.left}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Left Page
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`h-8 px-3 ${
+                    currentPages.right && image === currentPages.right
+                      ? "bg-[#fa9c34] text-white border-[#fa9c34]"
+                      : "bg-[#3a3a3a] border-[#4a4a4a] text-gray-300"
+                  } ${
+                    !currentPages.right
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-[#4a4a4a]"
+                  }`}
+                  onClick={() =>
+                    currentPages.right && handleChangePage(currentPages.right)
+                  }
+                  disabled={!currentPages.right}
+                >
+                  Right Page
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            )}
+
+          {/* Instructions - collapsible on mobile */}
+          <div
+            className={`${
+              isMobile ? "collapse-panel" : ""
+            } text-sm text-gray-300 bg-[#222] p-2 md:p-3 rounded border border-[#3a3a3a]`}
+          >
+            <details className={isMobile ? "" : "open"}>
+              <summary className="flex items-center text-[#fa9c34] font-medium cursor-pointer">
+                <Info className="mr-2 h-4 w-4" />
+                Instructions
+              </summary>
+              <div className="mt-2 space-y-1 text-xs md:text-sm">
+                <p className="ml-6">• Drag the crop area to position it</p>
+                <p className="ml-6">• Use mouse wheel or pinch to zoom</p>
+                <p className="ml-6">• Press ESC or click X to exit</p>
+              </div>
+            </details>
           </div>
-          <div className="relative h-[60vh] w-full border border-gray-700 rounded-md overflow-hidden">
+
+          {/* Cropper container - responsive height */}
+          <div
+            className="relative w-full border border-[#3a3a3a] rounded overflow-hidden bg-[#222]"
+            style={{
+              height: isMobile ? "calc(70vh - 160px)" : "calc(80vh - 180px)",
+              minHeight: "200px",
+            }}
+          >
             <Cropper
               image={image}
               crop={crop}
@@ -134,22 +244,67 @@ export default function ImageCropper({
               showGrid={true}
               objectFit="contain"
               classes={{
-                containerClassName: "rounded-md",
+                containerClassName: "rounded",
+                cropAreaClassName: "border-2 border-[#fa9c34]",
+              }}
+              style={{
+                containerStyle: {
+                  backgroundColor: "#111",
+                },
+                cropAreaStyle: {
+                  boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.7)",
+                },
               }}
             />
           </div>
-          <DialogFooter className="flex gap-2">
+
+          {/* Zoom controls for mobile */}
+          {isMobile && (
+            <div className="flex justify-center items-center gap-4 my-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 p-0 bg-[#3a3a3a] border-[#4a4a4a] text-white"
+                onClick={() => setZoom(Math.max(1, zoom - 0.2))}
+              >
+                -
+              </Button>
+              <span className="text-sm text-gray-300">
+                Zoom: {zoom.toFixed(1)}x
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 p-0 bg-[#3a3a3a] border-[#4a4a4a] text-white"
+                onClick={() => setZoom(Math.min(10, zoom + 0.2))}
+              >
+                +
+              </Button>
+            </div>
+          )}
+
+          <DialogFooter className="flex flex-row justify-end gap-2 mt-2">
             <Button
               variant="outline"
-              onClick={handleClose}
-              className="bg-transparent border-gray-600 text-white hover:bg-gray-800 hover:text-white"
+              onClick={onClose}
+              className="h-9 bg-[#3a3a3a] border-[#4a4a4a] text-white hover:bg-[#4a4a4a]"
+              size={isMobile ? "sm" : "default"}
             >
               Cancel
             </Button>
             <Button
+              onClick={handleSendFullImage}
+              disabled={isLoading}
+              className="h-9 bg-[#3a3a3a] border-[#4a4a4a] text-white hover:bg-[#4a4a4a]"
+              size={isMobile ? "sm" : "default"}
+            >
+              {isLoading ? "Processing..." : "Send Full Image"}
+            </Button>
+            <Button
               onClick={handleCrop}
               disabled={isLoading}
-              className="bg-orange-600 text-white hover:bg-orange-700"
+              className="h-9 bg-[#fa9c34] text-white hover:bg-[#e08b2d] border-none"
+              size={isMobile ? "sm" : "default"}
             >
               {isLoading ? "Processing..." : "Crop & Add to Anki"}
             </Button>

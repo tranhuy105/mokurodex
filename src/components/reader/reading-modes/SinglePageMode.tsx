@@ -46,6 +46,8 @@ const SinglePageMode = ({
   const transformRef = useRef(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
+  // Track if TextBoxes should be visible
+  const [showTextBoxes, setShowTextBoxes] = useState(true);
 
   // Track animation state
   const [animationClass, setAnimationClass] = useState("");
@@ -211,6 +213,12 @@ const SinglePageMode = ({
       if (transformRef.current && transformRef.current.resetTransform) {
         // @ts-expect-error - Method is available but not properly typed in the library
         transformRef.current.resetTransform();
+
+        // Reset zoom state and ensure TextBoxes are visible
+        if (isMountedRef.current) {
+          setIsZoomed(false);
+          setShowTextBoxes(true);
+        }
       }
     };
 
@@ -289,7 +297,21 @@ const SinglePageMode = ({
         }}
         onTransformed={(ref) => {
           if (isMountedRef.current) {
-            setIsZoomed(ref.state.scale > 1.01);
+            const newScale = ref.state.scale;
+            const wasZoomed = isZoomed;
+            setIsZoomed(newScale > 1.01);
+
+            // Toggle TextBoxes visibility based on zoom state
+            if (newScale > 1.01 && !wasZoomed) {
+              setShowTextBoxes(false);
+            } else if (newScale <= 1.01 && wasZoomed) {
+              // Small delay to let transform complete before showing TextBoxes
+              setTimeout(() => {
+                if (isMountedRef.current) {
+                  setShowTextBoxes(true);
+                }
+              }, 300);
+            }
           }
         }}
         ref={transformRef}
@@ -305,7 +327,10 @@ const SinglePageMode = ({
                   <PageView
                     key={`${currentPage}-${page.imagePath}-${settings.rightToLeft}`}
                     page={page}
-                    settings={settings}
+                    settings={{
+                      ...settings,
+                      showTooltips: showTextBoxes && settings.showTooltips,
+                    }}
                     pageNumber={currentPage}
                     priority={true}
                     onCropperStateChange={handleCropperStateChange}

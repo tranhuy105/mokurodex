@@ -3,9 +3,6 @@
 import { useState, memo, useEffect, useRef } from "react";
 import { Settings } from "@/hooks/useSettings";
 import TextBoxes from "./TextBoxes";
-import ImageCropper from "./ImageCropper";
-import { updateLastCard, urlToWebp } from "@/lib/anki-connect";
-import { toast } from "react-hot-toast";
 import { AlertCircle } from "lucide-react";
 import { Page, TextBlock as PrismaTextBlock } from "@prisma/client";
 
@@ -21,122 +18,11 @@ interface PageViewProps {
   mode?: "single" | "longStrip";
 }
 
-// Context menu component
-interface ContextMenuProps {
-  x: number;
-  y: number;
-  image: string;
-  onCrop: () => void;
-  onClose: () => void;
-}
-
-const ContextMenu = ({ x, y, image, onCrop, onClose }: ContextMenuProps) => {
-  const [isLoading, setIsLoading] = useState(false);
-
-  console.log(image);
-
-  // Handle sending full image to Anki
-  const handleSendFullImage = async () => {
-    try {
-      setIsLoading(true);
-      const confirmed = window.confirm(
-        "Add the full image to the last created Anki card?"
-      );
-      if (confirmed) {
-        toast.loading("Converting and sending image to Anki...", {
-          duration: 5000,
-        });
-        const webpImage = await urlToWebp(image);
-        if (webpImage) {
-          await updateLastCard(webpImage);
-        } else {
-          throw new Error("Failed to convert image to WebP");
-        }
-      }
-    } catch (error) {
-      console.error("Error sending image to Anki:", error);
-      toast.error(
-        "Failed to send image to Anki: " +
-          (error instanceof Error ? error.message : String(error))
-      );
-    } finally {
-      setIsLoading(false);
-      onClose();
-    }
-  };
-
-  // Close menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest(".anki-context-menu")) {
-        onClose();
-      }
-    };
-
-    // Add click listener with slight delay to avoid immediate closing
-    const timeoutId = setTimeout(() => {
-      document.addEventListener("click", handleClickOutside);
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener("click", handleClickOutside);
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed z-50 bg-gray-800 rounded-lg shadow-xl text-white overflow-hidden border border-gray-700 anki-context-menu"
-      style={{
-        left: x,
-        top: y,
-        transform: "translate(-50%, -50%)",
-        minWidth: "200px",
-        animation: "fadeIn 0.15s ease-out",
-      }}
-    >
-      <style jsx>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-          }
-        }
-      `}</style>
-      <div className="px-4 py-2 bg-gray-700 font-medium border-b border-gray-600">
-        Anki Options
-      </div>
-      <button
-        className="flex items-center w-full px-4 py-2 text-left hover:bg-gray-700 transition-colors"
-        onClick={onCrop}
-        disabled={isLoading}
-      >
-        <span className="mr-2 text-orange-400">✂️</span>
-        <span>Crop & Send to Anki</span>
-      </button>
-      <button
-        className="flex items-center w-full px-4 py-2 text-left hover:bg-gray-700 transition-colors"
-        onClick={handleSendFullImage}
-        disabled={isLoading}
-      >
-        <span className="mr-2 text-green-400">🖼️</span>
-        <span>{isLoading ? "Processing..." : "Send Full Image to Anki"}</span>
-      </button>
-    </div>
-  );
-};
-
 // Memoize the PageView component to prevent unnecessary re-renders
 const PageView = memo(function PageView({
   page,
   settings,
   pageNumber,
-  onCropperStateChange,
 }: PageViewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
@@ -144,11 +30,6 @@ const PageView = memo(function PageView({
   const [isMobile, setIsMobile] = useState(false);
   console.log(page);
   const [imageUrl, setImageUrl] = useState<string>(page.imagePath);
-  const [isCropperOpen, setIsCropperOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -242,36 +123,6 @@ const PageView = memo(function PageView({
         img.src = newUrl;
       }
     }
-  };
-
-  // Handle context menu for the Anki actions
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent default context menu
-    setContextMenu({ x: e.clientX, y: e.clientY });
-  };
-
-  const handleCrop = async (croppedImage: string) => {
-    console.log("Cropping image and updating Anki card...");
-    await updateLastCard(croppedImage);
-    console.log("Image cropped and card updated successfully");
-    setIsCropperOpen(false);
-    if (onCropperStateChange) {
-      onCropperStateChange(false);
-    }
-  };
-
-  // Close context menu
-  const closeContextMenu = () => {
-    setContextMenu(null);
-  };
-
-  // Open cropper from context menu
-  const openCropper = () => {
-    setIsCropperOpen(true);
-    if (onCropperStateChange) {
-      onCropperStateChange(true);
-    }
-    closeContextMenu();
   };
 
   // Handle image load
@@ -476,7 +327,6 @@ const PageView = memo(function PageView({
                 WebkitUserSelect: "none",
                 minHeight: isMobile ? "50px" : "auto", // Ensure a minimum height on mobile
               }}
-              onContextMenu={handleContextMenu}
             >
               {/* Use img element instead of background-image for better format support */}
               <img
@@ -534,38 +384,6 @@ const PageView = memo(function PageView({
           </div>
         )}
       </div>
-
-      {/* Context Menu */}
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          image={imageUrl}
-          onCrop={openCropper}
-          onClose={closeContextMenu}
-        />
-      )}
-
-      {isCropperOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black bg-opacity-50"
-          onClick={(e) => {
-            e.stopPropagation();
-          }}
-        />
-      )}
-
-      <ImageCropper
-        isOpen={isCropperOpen}
-        onClose={() => {
-          setIsCropperOpen(false);
-          if (onCropperStateChange) {
-            onCropperStateChange(false);
-          }
-        }}
-        image={imageUrl}
-        onCrop={handleCrop}
-      />
     </div>
   );
 });

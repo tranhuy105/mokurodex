@@ -300,7 +300,7 @@ export default function TextBoxes({
                     : "opacity-0 group-hover:opacity-100 group-active:opacity-100"
                 }`}
               >
-                {lines.map((line, i) => (
+                {lines.map((line: string, i: number) => (
                   <p
                     key={i}
                     className="m-0 whitespace-nowrap text-white bg-gray-900"

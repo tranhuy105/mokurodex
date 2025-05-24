@@ -431,11 +431,6 @@ async function createMangaImagePath(
 
     // Get the absolute path to the image
     const absolutePath = await joinPath(directoryPath, volumeName, imageName);
-    console.log(
-      `Creating image path for ${mangaId}/${volumeName}/${imageName}`
-    );
-    console.log(`Base directory: ${directoryPath}`);
-    console.log(`Absolute path: ${absolutePath}`);
 
     // Return URL to API endpoint with absolutePath parameter
     // Make sure to double-encode backslashes for Windows paths
@@ -443,11 +438,9 @@ async function createMangaImagePath(
       /%5C/g,
       "%5C%5C"
     );
-    console.log(`Encoded path: ${encodedPath}`);
 
     return `/api/media?absolutePath=${encodedPath}`;
   } catch (error) {
-    console.error(`Error creating image path URL: ${error}`);
     throw error;
   }
 }
