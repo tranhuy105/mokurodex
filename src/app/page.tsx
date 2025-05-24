@@ -1,4 +1,4 @@
-import { Book } from "lucide-react";
+import { Book, FileText, LayoutGrid } from "lucide-react";
 // import { getAllManga } from "@/actions/manga-actions";
 import { PageHeader } from "@/components/ui/PageHeader";
 // import { EmptyState } from "@/components/ui/EmptyState";
@@ -6,9 +6,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Suspense } from "react";
 import Link from "next/link";
 // import { MangaCard } from "@/components/manga/MangaCard";
-import { FileText, LayoutGrid } from "lucide-react";
 import { MangaGrid } from "@/components/manga/MangaGrid";
 import { getAllMangaWithUserData } from "@/actions/manga-management-prisma";
+import { ContinueReading } from "@/components/manga/ContinueReading";
 
 // Main content component
 // async function MangaContent() {
@@ -140,6 +140,84 @@ import { getAllMangaWithUserData } from "@/actions/manga-management-prisma";
 //   }
 // }
 
+// Continue Reading component
+// async function ContinueReading() {
+//   const recentlyRead = await getRecentlyReadManga(3);
+
+//   if (recentlyRead.length === 0) {
+//     return null;
+//   }
+
+//   return (
+//     <div className="space-y-4">
+//       <div className="flex items-center justify-between">
+//         <h2 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+//           <BookOpen className="h-5 w-5 mr-2 text-green-500" />
+//           Continue Reading
+//         </h2>
+//         <Link
+//           href="/manga"
+//           className="text-sm font-medium text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300"
+//         >
+//           View all
+//         </Link>
+//       </div>
+
+//       <div className="grid grid-cols-1 gap-4">
+//         {recentlyRead.map((item) => (
+//           <div
+//             key={item.manga.id}
+//             className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 overflow-hidden"
+//           >
+//             <Link
+//               href={`/manga/${encodeURIComponent(item.manga.id)}/${
+//                 item.volumeId
+//               }/${item.lastReadPage}`}
+//               className="flex items-center p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+//             >
+//               <div className="relative h-20 w-16 flex-shrink-0 bg-gray-100 dark:bg-gray-900 rounded-md overflow-hidden">
+//                 {item.manga.coverImage ? (
+//                   <Image
+//                     src={item.manga.coverImage}
+//                     alt={item.manga.title}
+//                     fill
+//                     className="object-cover"
+//                   />
+//                 ) : (
+//                   <div className="flex items-center justify-center h-full">
+//                     <Book className="h-8 w-8 text-gray-400" />
+//                   </div>
+//                 )}
+//               </div>
+//               <div className="ml-4 flex-grow">
+//                 <h3 className="font-medium text-gray-900 dark:text-white">
+//                   {item.manga.title}
+//                 </h3>
+//                 <div className="text-sm text-gray-500 dark:text-gray-400">
+//                   <span className="inline-block">
+//                     Volume {item.volume.volumeNumber} • Page {item.lastReadPage}
+//                   </span>
+//                 </div>
+//                 <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+//                   <Clock className="inline-block h-3 w-3 mr-1" />
+//                   <span>
+//                     {formatDistanceToNow(new Date(item.timestamp))} ago
+//                   </span>
+//                 </div>
+//               </div>
+//               <div className="flex-shrink-0 ml-2">
+//                 <div className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-xs font-medium rounded-full">
+//                   Continue
+//                 </div>
+//               </div>
+//             </Link>
+//           </div>
+//         ))}
+//       </div>
+//     </div>
+//   );
+// }
+
 async function HomeStats() {
   const mangaList = await getAllMangaWithUserData();
   const totalManga = mangaList.length;
@@ -217,6 +295,15 @@ async function HomeStats() {
           </div>
         </div>
       </div>
+
+      {/* Continue Reading section */}
+      <Suspense
+        fallback={
+          <div className="h-24 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-xl"></div>
+        }
+      >
+        <ContinueReading limit={3} showHeader={true} />
+      </Suspense>
 
       {/* Recently added section */}
       {recentManga.length > 0 && (

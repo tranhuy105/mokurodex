@@ -91,9 +91,14 @@ export const VOLUME_MOCK_DATA = {
 interface VolumeCardProps {
   volume: Volume;
   mangaId: string;
+  readingHistory?: ReadingHistory | null;
 }
 
-export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
+export function VolumeCard({
+  volume,
+  mangaId,
+  readingHistory,
+}: VolumeCardProps) {
   console.log(volume);
   const pageCount = volume.metadata?.pageCount || 0;
   const [activePreviewIndex, setActivePreviewIndex] = useState(0);
@@ -103,9 +108,6 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
   const [isNsfw, setIsNsfw] = useState(false);
   const [isNsfwRevealed, setIsNsfwRevealed] = useState(false);
   const [contentReady, setContentReady] = useState(false);
-  const [lastReadEntry, setLastReadEntry] = useState<ReadingHistory | null>(
-    null
-  );
   const [progress, setProgress] = useState<number | null>(null);
 
   // Get preview images from the VolumeEntity previewImages property
@@ -134,36 +136,19 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
     checkNsfwStatus();
   }, [mangaId]);
 
-  // Fetch last read page for this volume
+  // Calculate reading progress based on the reading history prop
   useEffect(() => {
-    async function fetchLastReadPage() {
-      try {
-        const historyEntry = null;
-        // await getLastReadPageForVolume(
-        //     mangaId,
-        //     volume.volumeUuid
-        // );
-
-        if (historyEntry) {
-          setLastReadEntry(historyEntry);
-
-          // Calculate progress percentage if we know the page count
-          if (pageCount > 0) {
-            // Calculate percentage, but cap at 100%
-            const progressPercentage = Math.min(
-              Math.round((historyEntry / pageCount) * 100),
-              100
-            );
-            setProgress(progressPercentage);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching last read page:", error);
-      }
+    if (readingHistory && pageCount > 0) {
+      // Calculate percentage, but cap at 100%
+      const progressPercentage = Math.min(
+        Math.round((readingHistory.page / pageCount) * 100),
+        100
+      );
+      setProgress(progressPercentage);
+    } else {
+      setProgress(null);
     }
-
-    fetchLastReadPage();
-  }, [mangaId, volume.mokuroData.volume_uuid, pageCount]);
+  }, [readingHistory, pageCount]);
 
   // Handle image load completion
   const handleImageLoad = () => {
@@ -221,7 +206,7 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
   };
 
   // Get the page to navigate to - either the last read page or page 1
-  const targetPage = lastReadEntry ? lastReadEntry.page : 1;
+  const targetPage = readingHistory ? readingHistory.page : 1;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 transition-all hover:shadow-lg h-full">
@@ -311,7 +296,7 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
                           Reveal Content
                         </span>
                       </>
-                    ) : lastReadEntry ? (
+                    ) : readingHistory ? (
                       <>
                         <BookOpen className="w-4 h-4 mr-2" />
                         <span className="font-medium text-sm">
@@ -344,7 +329,7 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
                       NSFW
                     </span>
                   )}
-                  {lastReadEntry && (
+                  {readingHistory && (
                     <span className="ml-2 text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-1.5 py-0.5 rounded">
                       In Progress
                     </span>
@@ -368,11 +353,11 @@ export function VolumeCard({ volume, mangaId }: VolumeCardProps) {
                 <Eye className="w-4 h-4 mr-1.5 text-gray-400 dark:text-gray-500" />
                 <span>{pageCount || "?"} pages</span>
               </div>
-              {lastReadEntry && pageCount ? (
+              {readingHistory && pageCount ? (
                 <div className="flex items-center">
                   <BookOpen className="w-4 h-4 mr-1.5 text-green-500" />
                   <span className="text-green-600 dark:text-green-400">
-                    Page {lastReadEntry.page}/{pageCount} ({progress}%)
+                    Page {readingHistory.page}/{pageCount} ({progress}%)
                   </span>
                 </div>
               ) : (

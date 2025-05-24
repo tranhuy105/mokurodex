@@ -676,7 +676,11 @@ export function MangaDetail({ manga }: MangaDetailProps) {
               </div>
 
               <div className="p-5">
-                <VolumeGrid volumes={manga.volumes} mangaId={manga.id} />
+                <VolumeGrid
+                  volumes={manga.volumes}
+                  mangaId={manga.id}
+                  showReadingHistory
+                />
               </div>
             </div>
           </div>

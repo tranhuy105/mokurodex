@@ -76,8 +76,8 @@ async function MangaDetailContent({ mangaId }: { mangaId: string }) {
 }
 
 export default async function MangaPage({ params }: PageProps) {
-  // Access mangaId directly from params
-  const mangaId = decodeUrlParam(params.mangaId);
+  const p = await Promise.resolve(params);
+  const mangaId = decodeUrlParam(p.mangaId);
 
   return (
     <Suspense fallback={<MangaDetailSkeleton />}>

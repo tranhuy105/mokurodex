@@ -667,6 +667,40 @@ export async function addReadingHistoryEntry(entry: {
   }
 }
 
+/**
+ * Get reading history for multiple volumes in a single query
+ * This prevents N+1 query problems by fetching all history at once
+ */
+export async function getReadingHistoryForVolumes(volumeIds: string[]) {
+  if (!volumeIds.length) return new Map();
+  
+  try {
+    // Get the most recent reading history entry for each volume
+    const historyEntries = await prisma.readingHistory.findMany({
+      where: {
+        volumeId: {
+          in: volumeIds
+        }
+      },
+      orderBy: {
+        timestamp: 'desc'
+      },
+      distinct: ['volumeId']
+    });
+
+    // Create a map of volumeId to history entry for easy lookup
+    const historyMap = new Map();
+    historyEntries.forEach(entry => {
+      historyMap.set(entry.volumeId, entry);
+    });
+
+    return historyMap;
+  } catch (error) {
+    console.error("Error getting reading history for volumes:", error);
+    return new Map();
+  }
+}
+
 // ========== Search operations ==========
 
 /**
@@ -1074,6 +1108,54 @@ export async function searchMangaByTitle(query: string) {
     }));
   } catch (error) {
     console.error("Error searching manga by title:", error);
+    return [];
+  }
+}
+
+/**
+ * Get the most recently read manga with their latest reading position
+ * @param limit Number of manga to return
+ */
+export async function getRecentlyReadManga(limit: number = 5) {
+  try {
+    // Get the most recent reading history entries with distinct manga IDs
+    // This approach avoids the N+1 query problem by including all needed data in a single query
+    const recentHistory = await prisma.readingHistory.findMany({
+      orderBy: {
+        timestamp: "desc",
+      },
+      include: {
+        manga: true,
+        volume: {
+          include: {
+            // Include page count and other volume details in the same query
+            pages: {
+              select: {
+                id: true,
+              },
+              take: 1, // Just to check if there are pages
+            },
+          },
+        },
+      },
+      distinct: ["mangaId"],
+      take: limit,
+    });
+
+    // Return manga with the volume and page information
+    return recentHistory.map(entry => ({
+      manga: entry.manga,
+      volumeId: entry.volumeId,
+      volume: entry.volume,
+      lastReadPage: entry.page,
+      timestamp: entry.timestamp,
+      // Calculate progress percentage if we know the page count
+      progress: entry.volume.pageCount > 0 
+        ? Math.min(Math.round((entry.page / entry.volume.pageCount) * 100), 100)
+        : null,
+    }));
+  } catch (error) {
+    console.error("Error getting recently read manga:", error);
     return [];
   }
 }

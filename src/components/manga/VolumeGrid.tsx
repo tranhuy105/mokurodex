@@ -1,17 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { VolumeCard } from "./VolumeCard";
 import { ChevronDown, SortAsc } from "lucide-react";
 import { Volume } from "@/types/manga";
+import { getReadingHistoryForVolumes } from "@/actions/manga-management-prisma";
+import { ReadingHistory } from "@prisma/client";
 
 interface VolumeGridProps {
   volumes: Volume[];
   mangaId: string;
+  showReadingHistory?: boolean;
 }
 
-export function VolumeGrid({ volumes, mangaId }: VolumeGridProps) {
+export function VolumeGrid({
+  volumes,
+  mangaId,
+  showReadingHistory = false,
+}: VolumeGridProps) {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [readingHistoryMap, setReadingHistoryMap] = useState<
+    Map<string, ReadingHistory>
+  >(new Map());
+
+  // Fetch reading history for all volumes at once
+  useEffect(() => {
+    async function fetchReadingHistory() {
+      try {
+        // Extract all volume IDs
+        const volumeIds = volumes.map(
+          (volume) => volume.mokuroData.volume_uuid
+        );
+
+        // Fetch reading history for all volumes in a single query
+        const historyMap = await getReadingHistoryForVolumes(volumeIds);
+        setReadingHistoryMap(historyMap);
+
+        console.log(`Fetched reading history for ${historyMap.size} volumes`);
+      } catch (error) {
+        console.error("Error fetching reading history:", error);
+      }
+    }
+    if (showReadingHistory) {
+      fetchReadingHistory();
+    }
+  }, [volumes, showReadingHistory]);
 
   // Sort volumes based on current sort order
   const sortedVolumes = [...volumes].sort((a, b) => {
@@ -40,13 +73,20 @@ export function VolumeGrid({ volumes, mangaId }: VolumeGridProps) {
 
       {/* Volume cards */}
       <div className="flex flex-col space-y-5">
-        {sortedVolumes.map((volume) => (
-          <VolumeCard
-            key={volume.mokuroData.volume_uuid}
-            volume={volume}
-            mangaId={mangaId}
-          />
-        ))}
+        {sortedVolumes.map((volume) => {
+          // Get the reading history for this specific volume
+          const volumeHistory =
+            readingHistoryMap.get(volume.mokuroData.volume_uuid) || null;
+
+          return (
+            <VolumeCard
+              key={volume.mokuroData.volume_uuid}
+              volume={volume}
+              mangaId={mangaId}
+              readingHistory={volumeHistory}
+            />
+          );
+        })}
       </div>
     </div>
   );
