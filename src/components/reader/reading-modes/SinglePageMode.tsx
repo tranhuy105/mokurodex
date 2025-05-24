@@ -375,14 +375,12 @@ const SinglePageMode = ({
         <>
           {/* Previous Page Button - direction depends on reading mode */}
           <button
-            onClick={settings.rightToLeft ? handlePrevPage : handlePrevPage}
-            disabled={
-              settings.rightToLeft ? currentPage <= 1 : currentPage <= 1
-            }
+            onClick={handlePrevPage}
+            disabled={currentPage <= 1}
             className={`absolute ${
               settings.rightToLeft ? "right-1 md:right-4" : "left-1 md:left-4"
             } top-1/2 transform -translate-y-1/2 flex items-center justify-center w-12 h-12 ${
-              (settings.rightToLeft ? currentPage > 1 : currentPage > 1)
+              currentPage > 1
                 ? "bg-gray-800 hover:bg-gray-700"
                 : "bg-gray-800 opacity-40"
             } bg-opacity-70 text-white rounded-full shadow-lg transition-all`}
@@ -397,20 +395,12 @@ const SinglePageMode = ({
 
           {/* Next Page Button - direction depends on reading mode */}
           <button
-            onClick={settings.rightToLeft ? handleNextPage : handleNextPage}
-            disabled={
-              settings.rightToLeft
-                ? currentPage >= pages.length
-                : currentPage >= pages.length
-            }
+            onClick={handleNextPage}
+            disabled={currentPage >= pages.length}
             className={`absolute ${
               settings.rightToLeft ? "left-1 md:left-4" : "right-1 md:right-4"
             } top-1/2 transform -translate-y-1/2 flex items-center justify-center w-12 h-12 ${
-              (
-                settings.rightToLeft
-                  ? currentPage < pages.length
-                  : currentPage < pages.length
-              )
+              currentPage < pages.length
                 ? "bg-gray-800 hover:bg-gray-700"
                 : "bg-gray-800 opacity-40"
             } bg-opacity-70 text-white rounded-full shadow-lg transition-all`}

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronUp, Settings2, Home, List, Layers } from "lucide-react";
 import SettingsSidebar from "./SettingsSidebar";
-import { useSettings, useMangaReader, useReaderControls } from "@/hooks";
+import { useSettings, useReaderControls } from "@/hooks";
 import Link from "next/link";
 import ImageCropper from "./ImageCropper";
 import { updateLastCard } from "@/lib/anki-connect";
@@ -28,6 +28,10 @@ interface Props {
   pages: Page[];
   volumes: Volume[];
   initialPage: number;
+  onPageChange: (page: number) => void;
+  onVolumeChange: (volumeId: string, pageNum?: number) => void;
+  showControls?: boolean;
+  isLoading?: boolean;
 }
 
 export default function MangaReader({
@@ -36,39 +40,36 @@ export default function MangaReader({
   pages,
   volumes,
   initialPage,
+  onPageChange,
+  onVolumeChange,
+  showControls: externalShowControls,
+  isLoading = false,
 }: Props) {
-  // Use custom hooks
+  // Use settings hook
   const settings = useSettings();
-  const {
-    currentPage,
-    currentVolume,
-    currentPages,
-    isLoading,
-    navigateToPage,
-    navigateToVolume,
-  } = useMangaReader({
-    mangaId: manga,
-    volume,
-    pages,
-    volumes,
-    initialPage,
-  });
 
+  // Use reader controls hook - but allow external control
   const {
-    showControls,
+    showControls: internalShowControls,
     showScrollTop,
     showSidebar,
     toggleSidebar,
     containerRef,
   } = useReaderControls();
 
+  // Use external show controls if provided, otherwise use internal
+  const showControls =
+    externalShowControls !== undefined
+      ? externalShowControls
+      : internalShowControls;
+
   // Calculate actual page count to use when pages is empty
   const actualPageCount = useMemo(() => {
-    return currentPages.length || currentVolume.pageCount || 0;
-  }, [currentPages, currentVolume]);
+    return pages.length || volume.pageCount || 0;
+  }, [pages, volume]);
 
   // Memoize the page data to prevent unnecessary re-renders
-  const memoizedPages = useMemo(() => currentPages, [currentPages]);
+  const memoizedPages = useMemo(() => pages, [pages]);
 
   // Scroll to top function
   const scrollToTop = () => {
@@ -84,29 +85,25 @@ export default function MangaReader({
 
   // Get current page image and potentially second page image for double page mode
   const getCurrentPageImage = (): string | DoublePageData | null => {
-    if (
-      !currentPages.length ||
-      currentPage <= 0 ||
-      currentPage > currentPages.length
-    ) {
+    if (!pages.length || initialPage <= 0 || initialPage > pages.length) {
       return null;
     }
 
     // For single page mode or long strip mode, just return the current page
     if (settings.readingMode !== "doublePage") {
-      return currentPages[currentPage - 1]?.imagePath || "";
+      return pages[initialPage - 1]?.imagePath || "";
     }
 
     // For double page mode, return both images if available
     // Use the same logic as DoublePageMode to ensure correct pages are shown
     const adjustedCurrentPage =
-      currentPage % 2 === 0 && currentPage > 1 ? currentPage - 1 : currentPage;
+      initialPage % 2 === 0 && initialPage > 1 ? initialPage - 1 : initialPage;
 
     const leftPageIndex = adjustedCurrentPage - 1;
     const rightPageIndex = adjustedCurrentPage;
 
-    const leftPage = currentPages[leftPageIndex];
-    const rightPage = currentPages[rightPageIndex];
+    const leftPage = pages[leftPageIndex];
+    const rightPage = pages[rightPageIndex];
 
     return {
       left: leftPage?.imagePath || null,
@@ -161,12 +158,12 @@ export default function MangaReader({
   const renderContent = () => {
     const commonProps = {
       pages: memoizedPages,
-      currentPage,
+      currentPage: initialPage,
       settings,
       initialPage,
-      onPageChange: navigateToPage,
+      onPageChange,
       manga,
-      volumeId: currentVolume.volumeUuid,
+      volumeId: volume.volumeUuid,
       showControls,
     };
 
@@ -196,12 +193,12 @@ export default function MangaReader({
         <div className="fixed top-0 right-0 h-full z-[1000]">
           <SettingsSidebar
             onClose={toggleSidebar}
-            currentPage={currentPage}
+            currentPage={initialPage}
             totalPages={actualPageCount}
             volumes={volumes}
-            currentVolume={currentVolume}
-            onPageChange={navigateToPage}
-            onVolumeChange={navigateToVolume}
+            currentVolume={volume}
+            onPageChange={onPageChange}
+            onVolumeChange={onVolumeChange}
           />
         </div>
       )}
@@ -262,11 +259,11 @@ export default function MangaReader({
           showControls ? "opacity-100" : "opacity-0"
         }`}
       >
-        <ProgressBar currentPage={currentPage} totalPages={actualPageCount} />
+        <ProgressBar currentPage={initialPage} totalPages={actualPageCount} />
       </div>
 
       {/* Scroll to top button - only for long strip mode */}
-      {settings.readingMode === "longStrip" && showScrollTop && (
+      {showScrollTop && (
         <button
           onClick={scrollToTop}
           className="fixed bottom-4 right-16 bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-full shadow-lg transition-all"

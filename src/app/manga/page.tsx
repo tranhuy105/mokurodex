@@ -9,6 +9,9 @@ import {
   getAllMangaWithUserData,
 } from "@/actions/manga-management-prisma";
 
+// Tell Next.js to always render this page dynamically
+export const dynamic = 'force-dynamic';
+
 interface MangaListPageProps {
   searchParams?: {
     tags?: string;
@@ -22,8 +25,7 @@ interface MangaListPageProps {
 // Main content component
 async function MangaListContent({ searchParams }: MangaListPageProps) {
   try {
-    const params = await Promise.resolve(searchParams || {});
-    console.log("Loaded search params:", params);
+    const params = searchParams || {};
 
     // Parse filter parameters from URL
     const hasActiveFilters =
@@ -36,7 +38,6 @@ async function MangaListContent({ searchParams }: MangaListPageProps) {
     // If no active filters, get all manga rather than using searchMangaWithFilters
     let mangaListPromise;
     if (hasActiveFilters) {
-      console.log("Active filters detected, using searchMangaWithFilters");
       const filterOptions = {
         tags: params.tags ? params.tags.split(",") : undefined,
         collections: params.collections
@@ -47,16 +48,13 @@ async function MangaListContent({ searchParams }: MangaListPageProps) {
         query: params.query,
       };
 
-      console.log("Filter options:", filterOptions);
       mangaListPromise = searchMangaWithFilters(filterOptions);
     } else {
       // When no filters, get all manga
-      console.log("No active filters, getting all manga");
       mangaListPromise = getAllMangaWithUserData();
     }
 
     const mangaList = await mangaListPromise;
-    console.log(`Loaded ${mangaList.length} manga from database`);
 
     // Create the empty state component that will be passed to MangaGrid when needed
     const emptyState = (

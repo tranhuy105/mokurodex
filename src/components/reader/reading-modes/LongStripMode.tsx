@@ -1,7 +1,8 @@
 "use client";
 
 import { Settings } from "@/hooks/useSettings";
-import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { debounce } from "lodash";
 import PageView from "../PageView";
 import { Page } from "@prisma/client";
 
@@ -21,399 +22,196 @@ const LongStripMode = ({
   initialPage,
   onPageChange,
 }: ReadingModeProps) => {
-  // Stable refs for DOM elements and tracking
   const containerRef = useRef<HTMLDivElement>(null);
-  const pageElementsRef = useRef<Map<number, HTMLDivElement>>(new Map());
+  const pageRefs = useRef<{ [key: number]: HTMLDivElement }>({});
+  const lastReportedPage = useRef(initialPage);
+  const isInitialized = useRef(false);
+  const isScrollingProgrammatically = useRef(false);
 
-  // Single source of truth for current page - avoid multiple state tracking
-  const [activePageNumber, setActivePageNumber] = useState<number>(initialPage);
-  const activePageRef = useRef<number>(initialPage);
-
-  // Rendering window for virtualization
+  // Track visible pages to optimize rendering
   const [visibleRange, setVisibleRange] = useState<[number, number]>([
-    Math.max(0, initialPage - 3),
-    Math.min(pages.length, initialPage + 6),
+    Math.max(1, initialPage - 3),
+    initialPage + 5,
   ]);
 
-  // Flags to manage scroll behavior and prevent bugs
-  const isInitialized = useRef<boolean>(false);
-  const isManuallyScrolling = useRef<boolean>(false);
-  const isUpdatingPage = useRef<boolean>(false);
-  const lastScrollTop = useRef<number>(0);
-  const scrollStabilityCounter = useRef<number>(0);
-  const lastScrollDirection = useRef<string | null>(null);
+  // Get which page is currently most visible
+  const getCurrentPage = useCallback(() => {
+    if (!containerRef.current) return 1;
 
-  // Timing control for stability
-  const lastPageChangeTimestamp = useRef<number>(Date.now());
-  const CHANGE_COOLDOWN = 800; // Increase cooldown to prevent rapid page changes
+    const container = containerRef.current;
+    const scrollTop = container.scrollTop;
+    const containerHeight = container.clientHeight;
+    const centerY = scrollTop + containerHeight / 2;
 
-  // Handle ref cleanup properly on unmount
-  useEffect(() => {
-    return () => {
-      // Clear all refs to prevent memory leaks
-      pageElementsRef.current.clear();
+    let closestPage = 1;
+    let minDistance = Infinity;
 
-      // Clear any pending timeouts
-      if (scrollTimeoutRef.current) {
-        window.clearTimeout(scrollTimeoutRef.current);
+    Object.entries(pageRefs.current).forEach(([pageNum, element]) => {
+      const rect = element.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const elementTop = rect.top - containerRect.top + scrollTop;
+      const elementCenter = elementTop + rect.height / 2;
+      const distance = Math.abs(centerY - elementCenter);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestPage = parseInt(pageNum);
       }
-      if (urlUpdateTimeoutRef.current) {
-        window.clearTimeout(urlUpdateTimeoutRef.current);
-      }
-    };
+    });
+
+    return closestPage;
   }, []);
 
-  // Centralized page change function for consistent state updates
-  const changePage = useCallback(
-    (newPage: number, updateUrl = true) => {
-      if (isUpdatingPage.current) return;
-
-      try {
-        isUpdatingPage.current = true;
-
-        // Update refs first for immediate access in callbacks
-        activePageRef.current = newPage;
-        lastPageChangeTimestamp.current = Date.now();
-
-        // Then update state which will cause re-render
-        setActivePageNumber(newPage);
-
-        // Only update URL if requested and if different from current URL page
-        if (updateUrl && onPageChange && newPage !== currentPage) {
-          onPageChange(newPage);
-        }
-      } finally {
-        // Always reset the flag
-        isUpdatingPage.current = false;
+  // Update URL without causing scroll
+  const updatePageUrl = useCallback(
+    (page: number) => {
+      if (page !== lastReportedPage.current && onPageChange) {
+        lastReportedPage.current = page;
+        onPageChange(page);
       }
     },
-    [currentPage, onPageChange]
+    [onPageChange]
   );
 
-  // Timeouts for throttle/debounce
-  const scrollTimeoutRef = useRef<number | null>(null);
-  const urlUpdateTimeoutRef = useRef<number | null>(null);
+  // Update visible range based on current scroll position
+  const updateVisibleRange = useCallback(() => {
+    if (!containerRef.current) return;
 
-  // Scroll handler with improved stability and error handling
-  const handleScroll = useCallback(() => {
-    // Skip if not initialized or manually scrolling
-    if (!containerRef.current || isManuallyScrolling.current) return;
+    // Calculate which pages should be rendered based on scroll position
+    const currentPage = getCurrentPage();
+    const newVisibleRange: [number, number] = [
+      Math.max(1, currentPage - 3),
+      Math.min(pages.length, currentPage + 5),
+    ];
 
-    // Throttle scroll events
-    if (scrollTimeoutRef.current !== null) return;
+    setVisibleRange(newVisibleRange);
+  }, [getCurrentPage, pages.length]);
 
-    scrollTimeoutRef.current = window.setTimeout(() => {
-      scrollTimeoutRef.current = null;
+  // Handle scroll events - but ignore programmatic scrolls with increased debounce
+  const handleScroll = useCallback(
+    debounce(() => {
+      // Don't process scroll events during programmatic scrolling
+      if (isScrollingProgrammatically.current) return;
 
-      try {
-        const container = containerRef.current;
-        if (!container) return;
+      const newPage = getCurrentPage();
+      updatePageUrl(newPage);
+      updateVisibleRange();
+    }, 100), // Increased debounce time to reduce frequent updates
+    [getCurrentPage, updatePageUrl, updateVisibleRange]
+  );
 
-        // Get current scroll position and direction
-        const scrollTop = container.scrollTop;
-        const scrollDirection =
-          scrollTop > lastScrollTop.current ? "down" : "up";
-
-        // Check if scroll direction changed
-        const directionChanged =
-          lastScrollDirection.current !== null &&
-          lastScrollDirection.current !== scrollDirection;
-
-        // Update last direction
-        lastScrollDirection.current = scrollDirection;
-
-        // Reset stability counter if direction changed
-        if (directionChanged) {
-          scrollStabilityCounter.current = 0;
-        } else {
-          // Increment stability counter when scrolling in same direction
-          scrollStabilityCounter.current++;
-        }
-
-        // Store last scroll position
-        lastScrollTop.current = scrollTop;
-
-        // Return early if we recently changed pages (cooling down)
-        const now = Date.now();
-        if (now - lastPageChangeTimestamp.current < CHANGE_COOLDOWN) return;
-
-        // Only process scroll events after some stability in the same direction
-        // to prevent random jumps during fast scrolling
-        if (scrollStabilityCounter.current < 2) return;
-
-        // Find all visible pages and their visibility percentages
-        const visiblePages = new Map<number, number>();
-        let mostVisiblePage = activePageRef.current;
-        let highestVisibility = 0;
-
-        pageElementsRef.current.forEach((element, pageNumber) => {
-          // Calculate element visibility in viewport
-          const rect = element.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
-
-          const visibleTop = Math.max(rect.top, containerRect.top);
-          const visibleBottom = Math.min(rect.bottom, containerRect.bottom);
-
-          if (visibleBottom > visibleTop) {
-            const visibleHeight = visibleBottom - visibleTop;
-            const percentVisible = visibleHeight / rect.height;
-
-            // Store visibility data
-            visiblePages.set(pageNumber, percentVisible);
-
-            // Track most visible page
-            if (percentVisible > highestVisibility) {
-              highestVisibility = percentVisible;
-              mostVisiblePage = pageNumber;
-            }
-          }
-        });
-
-        // Get current active page visibility
-        const currentPageVisibility =
-          visiblePages.get(activePageRef.current) || 0;
-
-        // Determine if page change is needed based on stable criteria
-        let shouldChangePage = false;
-
-        // Case 1: Current page not visible at all and new page is significantly visible
-        if (currentPageVisibility === 0 && highestVisibility > 0.4) {
-          shouldChangePage = true;
-        }
-        // Case 2: New page is significantly more visible
-        else if (highestVisibility > currentPageVisibility + 0.35) {
-          shouldChangePage = true;
-        }
-        // Case 3: Direction-based changes with strong visibility
-        else if (
-          (scrollDirection === "down" &&
-            mostVisiblePage > activePageRef.current &&
-            highestVisibility > 0.5) ||
-          (scrollDirection === "up" &&
-            mostVisiblePage < activePageRef.current &&
-            highestVisibility > 0.5)
-        ) {
-          shouldChangePage = true;
-        }
-
-        // Apply page change if needed
-        if (shouldChangePage && mostVisiblePage !== activePageRef.current) {
-          // Prevent page changes that are too far from current page
-          // This helps prevent random jumps
-          if (Math.abs(mostVisiblePage - activePageRef.current) > 2) {
-            // For large jumps, be more conservative
-            if (highestVisibility < 0.7) {
-              return;
-            }
-          }
-
-          changePage(mostVisiblePage, true);
-
-          // Update virtualization window - conservative range
-          const newStartIdx = Math.max(0, mostVisiblePage - 3);
-          const newEndIdx = Math.min(pages.length, mostVisiblePage + 6);
-
-          // Only update if range changes significantly
-          if (
-            Math.abs(newStartIdx - visibleRange[0]) > 1 ||
-            Math.abs(newEndIdx - visibleRange[1]) > 1
-          ) {
-            setVisibleRange([newStartIdx, newEndIdx]);
-          }
-        }
-      } catch (error) {
-        // Handle errors gracefully
-        console.error("Error in scroll handler:", error);
-      }
-    }, 150); // Increase throttle delay for more stability
-  }, [changePage, pages.length, visibleRange]);
-
-  // Attach scroll event listener
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      container.removeEventListener("scroll", handleScroll);
-    };
-  }, [handleScroll]);
-
-  // Scroll to a specific page safely
+  // Scroll to specific page
   const scrollToPage = useCallback(
-    (pageNumber: number, behavior: ScrollBehavior = "auto") => {
-      const container = containerRef.current;
-      const targetElement = pageElementsRef.current.get(pageNumber);
+    (pageNumber: number) => {
+      const pageElement = pageRefs.current[pageNumber];
+      if (!pageElement || !containerRef.current) return;
 
-      if (!container) {
-        console.warn("Container ref not available for scrolling");
-        return false;
-      }
+      isScrollingProgrammatically.current = true;
 
-      if (!targetElement) {
-        console.warn(`Target element for page ${pageNumber} not found in refs`);
-        // Update page state anyway to keep UI consistent
-        changePage(pageNumber, true);
-        return false;
-      }
+      pageElement.scrollIntoView({
+        behavior: "auto",
+        block: "start",
+      });
 
-      try {
-        // Set flags to prevent page change during scroll
-        isManuallyScrolling.current = true;
+      // Update visible range immediately for the new position
+      const newVisibleRange: [number, number] = [
+        Math.max(1, pageNumber - 3),
+        Math.min(pages.length, pageNumber + 5),
+      ];
+      setVisibleRange(newVisibleRange);
 
-        // Update page state immediately to prevent flicker
-        changePage(pageNumber, false);
-
-        // Calculate scroll position with offset for better viewing
-        // Use a smaller offset for more precise positioning
-        const targetPosition = targetElement.offsetTop - 40;
-
-        // Perform the scroll
-        container.scrollTo({
-          top: targetPosition,
-          behavior,
-        });
-
-        console.log(
-          `Scrolled to page ${pageNumber} at position ${targetPosition}`
-        );
-        return true;
-      } catch (error) {
-        console.error("Error scrolling to page:", error);
-        return false;
-      } finally {
-        // Reset flags after scroll animation completes with appropriate timing
-        const delay = behavior === "smooth" ? 800 : 300;
-        setTimeout(() => {
-          isManuallyScrolling.current = false;
-          isInitialized.current = true;
-
-          // Reset scroll stability counter
-          scrollStabilityCounter.current = 0;
-
-          // Update URL after manual scroll completes
-          if (onPageChange && pageNumber !== currentPage) {
-            onPageChange(pageNumber);
-          }
-        }, delay);
-      }
+      // Clear the flag after a short delay
+      setTimeout(() => {
+        isScrollingProgrammatically.current = false;
+      }, 150);
     },
-    [changePage, currentPage, onPageChange]
+    [pages.length]
   );
 
-  // Handle initial page positioning
+  // Handle external page changes (navigation)
   useEffect(() => {
-    // Skip if already initialized
+    // Skip during initialization
+    if (!isInitialized.current) return;
+
+    // Skip if this page change came from our own scroll detection
+    if (currentPage === lastReportedPage.current) return;
+
+    // Only scroll for significant page jumps (real navigation)
+    const pageDiff = Math.abs(currentPage - lastReportedPage.current);
+    if (pageDiff > 1 && pageRefs.current[currentPage]) {
+      scrollToPage(currentPage);
+      lastReportedPage.current = currentPage;
+    }
+  }, [currentPage, scrollToPage]);
+
+  // One-time initialization - scroll to initial page
+  useEffect(() => {
     if (isInitialized.current) return;
 
-    let attemptCount = 0;
-    const maxAttempts = 6;
-
-    const attemptScroll = () => {
-      if (attemptCount >= maxAttempts || isInitialized.current) return;
-
-      attemptCount++;
-
-      // Check if target page element exists
-      if (pageElementsRef.current.has(initialPage)) {
+    const initializeScroll = () => {
+      if (pageRefs.current[initialPage]) {
         scrollToPage(initialPage);
+        lastReportedPage.current = initialPage;
+        isInitialized.current = true;
       } else {
-        // Retry with exponential backoff
-        const delay = Math.min(150 * Math.pow(1.5, attemptCount), 2000);
-        setTimeout(attemptScroll, delay);
+        // If page refs aren't ready, try again next frame
+        requestAnimationFrame(initializeScroll);
       }
     };
 
-    // Initial delay to allow first render
-    setTimeout(attemptScroll, 100);
-
-    // Cleanup
-    return () => {
-      // Mark as initialized to prevent further attempts
-      isInitialized.current = true;
-    };
+    // Wait for next frame to ensure all page refs are set
+    requestAnimationFrame(initializeScroll);
   }, [initialPage, scrollToPage]);
 
-  // Handle prop updates to currentPage
+  // Cleanup function for memory management
   useEffect(() => {
-    // Only respond to external page changes when different from our internal active page
-    if (currentPage === activePageNumber) return;
-
-    // Always attempt to scroll when explicitly requested via props,
-    // even if initialization is not complete
-    if (Math.abs(currentPage - activePageNumber) > 0) {
-      // First update our internal page tracking to prevent feedback loops
-      setActivePageNumber(currentPage);
-      activePageRef.current = currentPage;
-
-      // Use a small delay to ensure the DOM has updated with any newly rendered pages
-      setTimeout(() => {
-        // Try to scroll to the requested page
-        if (pageElementsRef.current.has(currentPage)) {
-          scrollToPage(currentPage, "auto");
-          isInitialized.current = true;
-        } else {
-          // If page element doesn't exist yet (might be outside render window),
-          // expand the visible range and try again
-          const newStartIdx = Math.max(0, currentPage - 5);
-          const newEndIdx = Math.min(pages.length, currentPage + 5);
-          setVisibleRange([newStartIdx, newEndIdx]);
-
-          // Try again after the range update
-          setTimeout(() => {
-            if (pageElementsRef.current.has(currentPage)) {
-              scrollToPage(currentPage, "auto");
-            }
-            isInitialized.current = true;
-          }, 50);
-        }
-      }, 50);
-    }
-  }, [currentPage, activePageNumber, scrollToPage, pages.length]);
-
-  // Render pages with efficient virtualization
-  const renderedPages = useMemo(() => {
-    const [startIdx, endIdx] = visibleRange;
-
-    return pages.slice(startIdx, endIdx).map((page, relativeIdx) => {
-      const pageIdx = startIdx + relativeIdx;
-      const pageNumber = pageIdx + 1; // 1-indexed page number
-
-      return (
-        <div
-          key={`page-${pageNumber}`}
-          ref={(el) => {
-            if (el) {
-              pageElementsRef.current.set(pageNumber, el);
-            } else if (pageElementsRef.current.has(pageNumber)) {
-              // Clean up removed elements
-              pageElementsRef.current.delete(pageNumber);
-            }
-          }}
-          className="relative flex justify-center w-full"
-          data-page-number={pageNumber}
-          data-page-element="true"
-        >
-          <PageView
-            page={page}
-            settings={settings}
-            pageNumber={pageNumber}
-            priority={Math.abs(pageNumber - activePageNumber) < 3}
-            mode="longStrip"
-          />
-        </div>
-      );
-    });
-  }, [visibleRange, pages, settings, activePageNumber]);
+    return () => {
+      // Cleanup when component unmounts
+      handleScroll.cancel();
+    };
+  }, [handleScroll]);
 
   return (
     <div
       ref={containerRef}
       className="h-full w-full overflow-y-auto overflow-x-hidden bg-gray-900 scrollbar-hide"
-      style={{ scrollBehavior: "auto" }} // Prevent browser smooth scrolling to avoid conflicts
+      onScroll={handleScroll}
     >
-      <div className="min-h-full w-full flex flex-col items-center justify-start">
-        {renderedPages}
+      <div className="w-full flex flex-col items-center space-y-4 py-4">
+        {pages.map((page, index) => {
+          const pageNumber = index + 1;
+          const isInVisibleRange =
+            pageNumber >= visibleRange[0] && pageNumber <= visibleRange[1];
+
+          // Determine if this page should be loaded with priority
+          const isPriority =
+            pageNumber === currentPage ||
+            Math.abs(pageNumber - currentPage) <= 1;
+
+          return (
+            <div
+              key={page.id}
+              ref={(el) => {
+                if (el) {
+                  pageRefs.current[pageNumber] = el;
+                } else {
+                  delete pageRefs.current[pageNumber];
+                }
+              }}
+              className="w-full flex justify-center"
+            >
+              {isInVisibleRange && (
+                <PageView
+                  page={page}
+                  settings={settings}
+                  pageNumber={pageNumber}
+                  priority={isPriority}
+                  mode="longStrip"
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

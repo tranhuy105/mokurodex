@@ -28,7 +28,6 @@ const PageView = memo(function PageView({
   const [imageError, setImageError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
-  console.log(page);
   const [imageUrl, setImageUrl] = useState<string>(page.imagePath);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
@@ -91,8 +90,6 @@ const PageView = memo(function PageView({
     // Simply use the imagePath directly as it's already correct
     setImageUrl(page.imagePath);
   }, [page.imagePath]);
-
-  console.log(imageUrl);
 
   // Function to retry loading image on error
   const retryLoadImage = () => {
@@ -211,7 +208,6 @@ const PageView = memo(function PageView({
     // Set a timeout to display error if image doesn't load
     loadTimeoutRef.current = setTimeout(() => {
       if (mountedRef.current && isLoading) {
-        console.log(`Image load timeout for page ${pageNumber}`);
         setIsLoading(false);
         setImageError(true);
       }

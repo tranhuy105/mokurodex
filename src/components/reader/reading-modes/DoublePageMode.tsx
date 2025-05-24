@@ -102,7 +102,7 @@ const DoublePageMode = ({
       !isCropperOpen &&
       !isZoomed
     ) {
-      // When in right-to-left mode, "previous" moves backward in page numbers
+      // Move back two pages
       onPageChange(adjustedCurrentPage - 2);
     }
   }, [adjustedCurrentPage, onPageChange, isCropperOpen, isZoomed]);
@@ -114,7 +114,7 @@ const DoublePageMode = ({
       !isCropperOpen &&
       !isZoomed
     ) {
-      // When in right-to-left mode, "next" moves forward in page numbers
+      // Move forward two pages
       onPageChange(adjustedCurrentPage + 2);
     }
   }, [
