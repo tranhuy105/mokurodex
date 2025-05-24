@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useState, useRef } from "react";
 import { MangaReaderProps, navigateToPage } from "@/lib/reader-utils";
-import { addReadingHistoryEntry } from "@/actions/manga-management-prisma";
 import { useSettings } from "@/hooks/useSettings";
 import { Page, Volume } from "@prisma/client";
 import { fetchVolumePages } from "@/actions/manga-api-prisma";
 import MangaReader from "./MangaReader";
-
+import { addReadingHistory } from "@/actions/manga-management-api-prisma";
 /**
  * Container component that handles the state management for the manga reader
  * This separates the concerns between URL handling and rendering
@@ -83,21 +82,32 @@ export default function MangaReaderContainer({
         return;
       }
 
-      try {
-        // Save the reading position
-        await addReadingHistoryEntry({
-          mangaId,
-          volumeId,
-          page,
-        });
+      // Only save when:
+      // 1. Volume has changed
+      // 2. Page has changed by at least 5 pages
+      // 3. It's the first or last page of the volume
+      const isVolumeChange = lastSavedPosition.current.volumeId !== volumeId;
+      const pageChange = Math.abs(lastSavedPosition.current.page - page);
+      const isSignificantPageChange = pageChange >= 3;
+      const isFirstOrLastPage = page === 1 || page === pages.length;
 
-        // Update last saved position
-        lastSavedPosition.current = { page, volumeId };
-      } catch (error) {
-        console.error("Error saving reading position:", error);
+      if (isVolumeChange || isSignificantPageChange || isFirstOrLastPage) {
+        try {
+          // Save the reading position
+          await addReadingHistory({
+            mangaId,
+            volumeId,
+            page,
+          });
+
+          // Update last saved position
+          lastSavedPosition.current = { page, volumeId };
+        } catch (error) {
+          console.error("Error saving reading position:", error);
+        }
       }
     },
-    [mangaId, autoSavePosition]
+    [mangaId, autoSavePosition, pages.length]
   );
 
   // Handle page change

@@ -3,6 +3,7 @@ import { BookOpen, Book, ChevronRight, Clock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
+import { unstable_noStore } from "next/cache";
 
 interface ContinueReadingProps {
   limit?: number;
@@ -13,6 +14,8 @@ export async function ContinueReading({
   limit = 3,
   showHeader = true,
 }: ContinueReadingProps) {
+  unstable_noStore();
+
   const recentlyRead = await getRecentlyReadManga(limit);
 
   if (recentlyRead.length === 0) {

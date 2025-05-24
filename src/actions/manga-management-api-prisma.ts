@@ -23,6 +23,7 @@ import {
   // Reading history operations
   getReadingHistory,
   addReadingHistoryEntry,
+  refreshContinueReading,
 
   // Search operations
   searchMangaWithFilters,
@@ -31,6 +32,9 @@ import {
   getMangaWithUserData,
   getAllMangaWithUserData,
 } from "./manga-management-prisma";
+
+import { prisma } from "@/lib/prisma";
+import { nanoid } from "nanoid";
 
 /**
  * Client-safe API for manga management operations
@@ -188,4 +192,84 @@ export async function fetchMangaWithUserData(mangaId: string) {
 
 export async function fetchAllMangaWithUserData() {
   return getAllMangaWithUserData();
+}
+
+export async function continueReading(entry: {
+  mangaId: string;
+  volumeId: string;
+  page: number;
+}) {
+  try {
+    const now = new Date();
+
+    // Check if an entry for this manga and volume already exists
+    const existingEntry = await prisma.readingHistory.findFirst({
+      where: {
+        mangaId: entry.mangaId,
+        volumeId: entry.volumeId,
+      },
+    });
+
+    let historyEntry;
+
+    if (existingEntry) {
+      // Update existing entry
+      historyEntry = await prisma.readingHistory.update({
+        where: { id: existingEntry.id },
+        data: {
+          page: entry.page,
+          timestamp: now,
+        },
+      });
+    } else {
+      // Create new entry if none exists
+      historyEntry = await prisma.readingHistory.create({
+        data: {
+          id: nanoid(),
+          mangaId: entry.mangaId,
+          volumeId: entry.volumeId,
+          page: entry.page,
+          timestamp: now,
+        },
+      });
+    }
+
+    // Update user manga metadata last read time
+    const existingMetadata = await prisma.userMangaMetadata.findUnique({
+      where: { mangaId: entry.mangaId },
+    });
+
+    if (existingMetadata) {
+      await prisma.userMangaMetadata.update({
+        where: { id: existingMetadata.id },
+        data: {
+          updatedAt: now,
+        },
+      });
+    } else {
+      // Create basic metadata if it doesn't exist
+      await prisma.userMangaMetadata.create({
+        data: {
+          id: nanoid(),
+          mangaId: entry.mangaId,
+          favorite: false,
+          updatedAt: now,
+        },
+      });
+    }
+
+    // No revalidation here to avoid re-renders during reading
+    return historyEntry;
+  } catch (error) {
+    console.error("Error updating reading progress:", error);
+    throw new Error("Failed to update reading progress");
+  }
+}
+
+/**
+ * Manually refresh the Continue Reading section on the homepage
+ * Call this when returning to the homepage after reading
+ */
+export async function refreshHomePageReading() {
+  return refreshContinueReading();
 }

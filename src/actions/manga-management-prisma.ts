@@ -625,16 +625,37 @@ export async function addReadingHistoryEntry(entry: {
   try {
     const now = new Date();
 
-    // Create the history entry
-    const historyEntry = await prisma.readingHistory.create({
-      data: {
-        id: nanoid(),
+    // Check if an entry for this manga and volume already exists
+    const existingEntry = await prisma.readingHistory.findFirst({
+      where: {
         mangaId: entry.mangaId,
         volumeId: entry.volumeId,
-        page: entry.page,
-        timestamp: now,
       },
     });
+
+    let historyEntry;
+
+    if (existingEntry) {
+      // Update existing entry
+      historyEntry = await prisma.readingHistory.update({
+        where: { id: existingEntry.id },
+        data: {
+          page: entry.page,
+          timestamp: now,
+        },
+      });
+    } else {
+      // Create new entry if none exists
+      historyEntry = await prisma.readingHistory.create({
+        data: {
+          id: nanoid(),
+          mangaId: entry.mangaId,
+          volumeId: entry.volumeId,
+          page: entry.page,
+          timestamp: now,
+        },
+      });
+    }
 
     // Update user manga metadata last read time
     const existingMetadata = await prisma.userMangaMetadata.findUnique({
@@ -660,6 +681,9 @@ export async function addReadingHistoryEntry(entry: {
       });
     }
 
+    // Don't revalidate during normal reading to avoid re-renders
+    // revalidatePath("/");
+
     return historyEntry;
   } catch (error) {
     console.error("Error adding reading history entry:", error);
@@ -673,24 +697,24 @@ export async function addReadingHistoryEntry(entry: {
  */
 export async function getReadingHistoryForVolumes(volumeIds: string[]) {
   if (!volumeIds.length) return new Map();
-  
+
   try {
     // Get the most recent reading history entry for each volume
     const historyEntries = await prisma.readingHistory.findMany({
       where: {
         volumeId: {
-          in: volumeIds
-        }
+          in: volumeIds,
+        },
       },
       orderBy: {
-        timestamp: 'desc'
+        timestamp: "desc",
       },
-      distinct: ['volumeId']
+      distinct: ["volumeId"],
     });
 
     // Create a map of volumeId to history entry for easy lookup
     const historyMap = new Map();
-    historyEntries.forEach(entry => {
+    historyEntries.forEach((entry) => {
       historyMap.set(entry.volumeId, entry);
     });
 
@@ -1143,19 +1167,32 @@ export async function getRecentlyReadManga(limit: number = 5) {
     });
 
     // Return manga with the volume and page information
-    return recentHistory.map(entry => ({
+    return recentHistory.map((entry) => ({
       manga: entry.manga,
       volumeId: entry.volumeId,
       volume: entry.volume,
       lastReadPage: entry.page,
       timestamp: entry.timestamp,
       // Calculate progress percentage if we know the page count
-      progress: entry.volume.pageCount > 0 
-        ? Math.min(Math.round((entry.page / entry.volume.pageCount) * 100), 100)
-        : null,
+      progress:
+        entry.volume.pageCount > 0
+          ? Math.min(
+              Math.round((entry.page / entry.volume.pageCount) * 100),
+              100
+            )
+          : null,
     }));
   } catch (error) {
     console.error("Error getting recently read manga:", error);
     return [];
   }
+}
+
+/**
+ * Revalidate the homepage to refresh the Continue Reading section
+ * Call this when returning to the homepage, not during active reading
+ */
+export async function refreshContinueReading() {
+  revalidatePath("/");
+  return { success: true };
 }

@@ -28,7 +28,6 @@ export async function GET(request: NextRequest) {
 
     // Security check: Make sure the path doesn't contain directory traversal
     const normalizedPath = path.normalize(decodedPath);
-    console.log("normalizedPath", normalizedPath);
 
     if (normalizedPath.includes("..")) {
       return NextResponse.json({ error: "Invalid path" }, { status: 403 });

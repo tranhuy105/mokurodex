@@ -21,7 +21,8 @@ interface PageProps {
 async function MangaReaderContent({ params }: { params: PageProps["params"] }) {
   try {
     // Parse and validate params
-    const { mangaId: encodedManga, volume: volumeId, page: pageStr } = params;
+    const p = await Promise.resolve(params);
+    const { mangaId: encodedManga, volume: volumeId, page: pageStr } = p;
     const mangaId = decodeUrlParam(encodedManga);
     const pageNum = parseInt(pageStr, 10);
 
