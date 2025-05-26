@@ -6,9 +6,13 @@ import {
   getSettings,
   updateSettings as updateSettingsAction,
 } from "@/actions/settings-actions";
+import config from "@/config/settings";
 
 // Reading modes similar to MangaDex
 export type ReadingMode = "singlePage" | "doublePage" | "longStrip";
+export type FuriganaDisplayType = "always" | "hover" | "never";
+export type DictionaryProviderType = "jisho" | "google" | "custom";
+export type PageNavigationMethodType = "click" | "tap" | "swipe" | "arrows";
 
 // This type mirrors the SettingsEntity from DatabaseInterface.ts but for client use
 interface Settings {
@@ -25,11 +29,13 @@ interface Settings {
   highlightColor: string;
   readerBackground: string;
   pageMargin: number;
-  furiganaDisplay: "always" | "hover" | "never";
+  furiganaDisplay: FuriganaDisplayType;
   autoSavePosition: boolean;
-  dictionaryProvider: "jisho" | "google" | "custom";
+  dictionaryProvider: DictionaryProviderType;
   customDictionaryUrl: string | null;
-  pageNavigationMethod: "click" | "tap" | "swipe" | "arrows";
+  pageNavigationMethod: PageNavigationMethodType;
+  // Data directory setting
+  mangaDir: string;
 }
 
 // Default settings to use before DB settings are loaded
@@ -52,7 +58,21 @@ const defaultSettings: Settings = {
   dictionaryProvider: "jisho",
   customDictionaryUrl: null,
   pageNavigationMethod: "click",
+  // Data directory default from config
+  mangaDir: config.mangaDir,
 };
+
+/**
+ * Helper function to safely cast string values to specific types
+ */
+function castToEnum<T extends string>(
+  value: string | undefined | null,
+  defaultValue: T,
+  allowedValues: T[]
+): T {
+  if (!value) return defaultValue;
+  return allowedValues.includes(value as T) ? (value as T) : defaultValue;
+}
 
 /**
  * Hook to access and update application settings
@@ -87,7 +107,11 @@ export function useSettings() {
               showTooltips: dbSettings.showTooltips,
               ankiEnabled: dbSettings.ankiEnabled,
               fontSize: dbSettings.fontSize as number,
-              readingMode: dbSettings.readingMode as ReadingMode,
+              readingMode: castToEnum(
+                dbSettings.readingMode,
+                defaultSettings.readingMode,
+                ["singlePage", "doublePage", "longStrip"]
+              ),
               // New settings
               animatePageTurns:
                 dbSettings.animatePageTurns ?? defaultSettings.animatePageTurns,
@@ -96,19 +120,28 @@ export function useSettings() {
               readerBackground:
                 dbSettings.readerBackground ?? defaultSettings.readerBackground,
               pageMargin: dbSettings.pageMargin ?? defaultSettings.pageMargin,
-              furiganaDisplay:
-                dbSettings.furiganaDisplay ?? defaultSettings.furiganaDisplay,
+              furiganaDisplay: castToEnum(
+                dbSettings.furiganaDisplay,
+                defaultSettings.furiganaDisplay,
+                ["always", "hover", "never"]
+              ),
               autoSavePosition:
                 dbSettings.autoSavePosition ?? defaultSettings.autoSavePosition,
-              dictionaryProvider:
-                dbSettings.dictionaryProvider ??
+              dictionaryProvider: castToEnum(
+                dbSettings.dictionaryProvider,
                 defaultSettings.dictionaryProvider,
+                ["jisho", "google", "custom"]
+              ),
               customDictionaryUrl:
                 dbSettings.customDictionaryUrl ??
                 defaultSettings.customDictionaryUrl,
-              pageNavigationMethod:
-                dbSettings.pageNavigationMethod ??
+              pageNavigationMethod: castToEnum(
+                dbSettings.pageNavigationMethod,
                 defaultSettings.pageNavigationMethod,
+                ["click", "tap", "swipe", "arrows"]
+              ),
+              // Get mangaDir from config if not in database
+              mangaDir: config.mangaDir,
             };
             setSettings(loadedSettings);
             console.log("Settings loaded from database:", loadedSettings);

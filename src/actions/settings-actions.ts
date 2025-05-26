@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
+import config from "@/config/settings";
 
 // Type for settings input
 export type SettingsInput = {
@@ -23,6 +24,7 @@ export type SettingsInput = {
   dictionaryProvider?: "jisho" | "google" | "custom";
   customDictionaryUrl?: string | null;
   pageNavigationMethod?: "click" | "tap" | "swipe" | "arrows";
+  mangaDir?: string;
 };
 
 /**
@@ -45,6 +47,7 @@ export async function getSettings() {
     return {
       ...settings,
       fontSize,
+      mangaDir: config.mangaDir, // Always return the mangaDir from config
     };
   } catch (error) {
     console.error("Error getting settings:", error);
@@ -106,6 +109,7 @@ export async function updateSettings(input: SettingsInput) {
       return {
         ...newSettings,
         fontSize,
+        mangaDir: config.mangaDir, // Always return the mangaDir from config
       };
     } else {
       // Update existing settings
@@ -143,6 +147,7 @@ export async function updateSettings(input: SettingsInput) {
       return {
         ...updatedSettings,
         fontSize,
+        mangaDir: config.mangaDir, // Always return the mangaDir from config
       };
     }
   } catch (error) {
@@ -206,5 +211,6 @@ async function createDefaultSettings() {
   return {
     ...defaultSettings,
     fontSize: "auto",
+    mangaDir: config.mangaDir, // Always return the mangaDir from config
   };
 }

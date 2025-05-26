@@ -6,6 +6,7 @@ import {
   deleteManga,
   clearAndRescanAllManga,
   importCustomDirectory,
+  scanDataSubdirectories,
 } from "./manga-import-actions-prisma";
 
 /**
@@ -60,4 +61,17 @@ export async function resetAndRescanAllManga() {
  */
 export async function importCustomMangaDirectory(customPath: string) {
   return importCustomDirectory(customPath);
+}
+
+/**
+ * Scan all subdirectories in a data directory (manga or ln)
+ * @param dataDir The base data directory
+ * @param type The type of content to scan ('manga' or 'ln')
+ * @returns Results of the scan operation
+ */
+export async function scanDataDirectoryContent(
+  dataDir: string,
+  type: "manga" | "ln"
+) {
+  return scanDataSubdirectories(dataDir, type);
 }

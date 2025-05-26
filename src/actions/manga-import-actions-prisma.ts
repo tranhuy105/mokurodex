@@ -15,8 +15,6 @@ async function importMangaFromDirectory(
   isCustomPath: boolean = false
 ) {
   const now = new Date();
-  // Generate a unique ID for this manga using nanoid
-  const mangaId = providedMangaId || nanoid();
 
   try {
     // Dynamically import server-only functions
@@ -43,6 +41,17 @@ async function importMangaFromDirectory(
     const firstMokuroFile = await joinPath(directoryPath, mokuroFiles[0]);
     const firstMokuroContent = await readFile(firstMokuroFile);
     const firstMokuroData = JSON.parse(firstMokuroContent);
+
+    // Check if manga already exists with this directory path
+    const existingManga = await prisma.manga.findFirst({
+      where: { directoryPath: directoryPath },
+      include: {
+        mangaVolumes: true,
+      },
+    });
+
+    // Generate a manga ID - use existing ID if found, provided ID if given, or generate new one
+    const mangaId = existingManga?.id || providedMangaId || nanoid();
 
     // Get the cover image from the first page of the first volume
     let coverImage = null;
@@ -85,9 +94,22 @@ async function importMangaFromDirectory(
     // Create default user metadata if it doesn't exist
     await createDefaultUserMetadata(mangaId);
 
+    // Get existing volumes to avoid reimporting
+    const existingVolumes = existingManga?.mangaVolumes || [];
+    const existingVolumeFilePaths = new Set(
+      existingVolumes.map((vol) => vol.filePath)
+    );
+
     // Process and import each volume
     for (const mokuroFile of mokuroFiles) {
       const mokuroPath = await joinPath(directoryPath, mokuroFile);
+
+      // Skip this volume if it already exists
+      if (existingVolumeFilePaths.has(mokuroPath)) {
+        console.log(`Skipping existing volume: ${mokuroPath}`);
+        continue;
+      }
+
       const mokuroContent = await readFile(mokuroPath);
       const mokuroData = JSON.parse(mokuroContent);
 
@@ -122,20 +144,9 @@ async function importMangaFromDirectory(
         extractVolumeNumber(mokuroData.volume) ||
         mokuroFiles.indexOf(mokuroFile) + 1;
 
-      // Create or update the volume using Prisma
-      const volume = await prisma.volume.upsert({
-        where: { id: mokuroData.volume_uuid || nanoid() },
-        update: {
-          volumeNumber: volumeNumber,
-          volumeTitle: mokuroData.volume || `Volume ${volumeNumber}`,
-          filePath: mokuroPath,
-          coverImage: volumeCoverImage,
-          pageCount: mokuroData.pages?.length || 0,
-          lastModified: volumeLastModified,
-          previewImages:
-            previewImages.length > 0 ? JSON.stringify(previewImages) : null,
-        },
-        create: {
+      // Create the volume
+      const volume = await prisma.volume.create({
+        data: {
           id: mokuroData.volume_uuid || nanoid(),
           mangaId: mangaId,
           volumeNumber: volumeNumber,
@@ -164,7 +175,7 @@ async function importMangaFromDirectory(
     if (!isCustomPath) {
       try {
         await prisma.manga.update({
-          where: { id: mangaId },
+          where: { id: providedMangaId || nanoid() },
           data: {
             scanStatus: "error",
             errorMessage:
@@ -258,11 +269,34 @@ async function importPagesAndTextBlocks(
       throw new Error(`Volume ${volumeId} not found or has no file path`);
     }
 
+    // Prepare batch arrays for pages and text blocks
+    const pageBatch: Array<{
+      id: string;
+      volumeId: string;
+      pageNumber: number;
+      imagePath: string;
+      width: number;
+      height: number;
+    }> = [];
+
+    const textBlocksBatch: Array<{
+      id: string;
+      pageId: string;
+      boxX: number;
+      boxY: number;
+      boxWidth: number;
+      boxHeight: number;
+      text: string;
+      fontSize: number;
+      isVertical: boolean;
+      linesCoords: string | null;
+    }> = [];
+
     // Process each page
     for (let pageIndex = 0; pageIndex < mokuroData.pages.length; pageIndex++) {
-      const pageData = mokuroData.pages[pageIndex];
+      const page = mokuroData.pages[pageIndex];
       const pageNumber = pageIndex + 1;
-      const imageName = pageData.img_path || `page_${pageNumber}.jpg`;
+      const imageName = page.img_path || `page_${pageNumber}.jpg`;
 
       // Create API path with absolute path
       const apiImagePath = await createMangaImagePath(
@@ -272,38 +306,52 @@ async function importPagesAndTextBlocks(
         manga.directoryPath
       );
 
-      // Create the page
-      const page = await prisma.page.create({
-        data: {
-          volumeId,
-          pageNumber,
-          imagePath: apiImagePath,
-          width: pageData.img_width || 800,
-          height: pageData.img_height || 1200,
-        },
+      // Generate page ID
+      const pageId = `${volumeId}_page_${pageNumber}`;
+
+      // Add page to batch
+      pageBatch.push({
+        id: pageId,
+        volumeId,
+        pageNumber,
+        imagePath: apiImagePath,
+        width: page.img_width || 800,
+        height: page.img_height || 1200,
       });
 
       // Process text blocks on the page
-      if (pageData.blocks && pageData.blocks.length > 0) {
-        const textBlocks = pageData.blocks.map((block) => ({
-          pageId: page.id,
-          boxX: block.box[0],
-          boxY: block.box[1],
-          boxWidth: block.box[2] - block.box[0],
-          boxHeight: block.box[3] - block.box[1],
-          text: JSON.stringify(block.lines),
-          fontSize: block.font_size || 12,
-          isVertical: block.vertical || false,
-          linesCoords: block.lines_coords
-            ? JSON.stringify(block.lines_coords)
-            : null,
-        }));
-
-        // Create all text blocks for this page
-        await prisma.textBlock.createMany({
-          data: textBlocks,
+      if (page.blocks && page.blocks.length > 0) {
+        page.blocks.forEach((block) => {
+          textBlocksBatch.push({
+            id: nanoid(),
+            pageId: pageId,
+            boxX: block.box[0],
+            boxY: block.box[1],
+            boxWidth: block.box[2] - block.box[0],
+            boxHeight: block.box[3] - block.box[1],
+            text: JSON.stringify(block.lines),
+            fontSize: block.font_size || 12,
+            isVertical: block.vertical || false,
+            linesCoords: block.lines_coords
+              ? JSON.stringify(block.lines_coords)
+              : null,
+          });
         });
       }
+    }
+
+    // Bulk insert all pages at once
+    if (pageBatch.length > 0) {
+      await prisma.page.createMany({
+        data: pageBatch,
+      });
+    }
+
+    // Bulk insert all text blocks at once
+    if (textBlocksBatch.length > 0) {
+      await prisma.textBlock.createMany({
+        data: textBlocksBatch,
+      });
     }
   } catch (error) {
     console.error(`Error importing pages for volume ${volumeId}:`, error);
@@ -578,5 +626,110 @@ export async function importCustomDirectory(customPath: string) {
   } catch (error) {
     console.error(`Error in importCustomDirectory: ${error}`);
     return null;
+  }
+}
+
+/**
+ * Scan all subdirectories in a data directory (manga or ln)
+ * This function handles scanning all subdirectories and importing them
+ *
+ * @param dataDir The base data directory
+ * @param type The type of content to scan ('manga' or 'ln')
+ * @returns Results of the scan operation
+ */
+export async function scanDataSubdirectories(
+  dataDir: string,
+  type: "manga" | "ln"
+) {
+  try {
+    // Construct the path to the manga or ln subdirectory
+    const subDir = type === "manga" ? "manga" : "ln";
+    const targetPath = `${dataDir}/${subDir}`;
+
+    // Dynamically import server-only functions
+    const { readDirectoryWithFileTypes, directoryExists } = await import(
+      "@/lib/server/fs-adapter"
+    );
+
+    // Check if the directory exists
+    const dirExists = await directoryExists(targetPath);
+    if (!dirExists) {
+      return {
+        success: false,
+        error: `Directory not found: ${targetPath}. Please create it first.`,
+        importedCount: 0,
+        failedCount: 0,
+        importedItems: [],
+        failedItems: [],
+      };
+    }
+
+    // List subdirectories in the target path
+    const entries = await readDirectoryWithFileTypes(targetPath);
+
+    // Filter for directories only
+    const subDirectories = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => ({
+        name: entry.name,
+        path: `${targetPath}/${entry.name}`,
+      }));
+
+    if (subDirectories.length === 0) {
+      return {
+        success: false,
+        error: `No subdirectories found in ${targetPath}`,
+        importedCount: 0,
+        failedCount: 0,
+        importedItems: [],
+        failedItems: [],
+      };
+    }
+
+    // Process each subdirectory
+    const successfulImports = [];
+    const failedImports = [];
+
+    for (const dir of subDirectories) {
+      try {
+        // Import this specific manga directory
+        const result = await importCustomDirectory(dir.path);
+        if (result) {
+          successfulImports.push({
+            name: dir.name,
+            id: result.id,
+          });
+        } else {
+          failedImports.push({
+            name: dir.name,
+            error: "Import failed",
+          });
+        }
+      } catch (error) {
+        console.error(`Error importing ${dir.path}:`, error);
+        failedImports.push({
+          name: dir.name,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
+
+    return {
+      success: successfulImports.length > 0,
+      importedCount: successfulImports.length,
+      failedCount: failedImports.length,
+      importedItems: successfulImports,
+      failedItems: failedImports,
+    };
+  } catch (error) {
+    console.error("Error scanning data subdirectories:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+      importedCount: 0,
+      failedCount: 0,
+      importedItems: [],
+      failedItems: [],
+    };
   }
 }
