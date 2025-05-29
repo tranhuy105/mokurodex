@@ -309,3 +309,118 @@ svg text {
 .animate-fadeIn {
   animation: fadeIn 0.5s ease-out forwards;
 }
+
+/* Light Novel Reader Styles */
+.light-novel-content {
+  font-family: 'Georgia', serif;
+  font-size: 1.125rem;
+  line-height: 1.8;
+  letter-spacing: 0.01em;
+  color: #333;
+}
+
+.dark .light-novel-content {
+  color: #e5e5e5;
+}
+
+.light-novel-content p {
+  margin-bottom: 1.5rem;
+}
+
+.light-novel-content h1,
+.light-novel-content h2,
+.light-novel-content h3,
+.light-novel-content h4,
+.light-novel-content h5,
+.light-novel-content h6 {
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.light-novel-content img {
+  display: block;
+  margin: 2rem auto;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+/* Missing image placeholder */
+.light-novel-content .missing-image {
+  display: block;
+  margin: 2rem auto;
+  padding: 2rem;
+  background-color: rgba(0, 0, 0, 0.05);
+  border: 1px dashed rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.5);
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+.dark .light-novel-content .missing-image {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Chapter styling */
+.light-novel-content .chapter {
+  margin-bottom: 3rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.dark .light-novel-content .chapter {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.light-novel-content .chapter:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+/* Reading experience improvements */
+@media (min-width: 768px) {
+  .light-novel-content {
+    font-size: 1.25rem;
+    max-width: 65ch;
+    margin: 0 auto;
+  }
+}
+
+/* Smooth scrolling for the entire page */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar for the reader */
+.light-novel-reader::-webkit-scrollbar {
+  width: 8px;
+}
+
+.light-novel-reader::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.light-novel-reader::-webkit-scrollbar-thumb {
+  background-color: rgba(155, 155, 155, 0.5);
+  border-radius: 20px;
+}
+
+.light-novel-reader::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(155, 155, 155, 0.8);
+}
+
+/* Dark mode adjustments */
+.dark .light-novel-reader::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 100, 100, 0.5);
+}
+
+.dark .light-novel-reader::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 100, 100, 0.8);
+}

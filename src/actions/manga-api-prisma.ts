@@ -9,6 +9,8 @@ import {
   scanDataSubdirectories,
 } from "./manga-import-actions-prisma";
 
+import { scanLightNovelDirectory } from "./epub-import-actions";
+
 /**
  * Client-safe API for manga operations
  * These functions can be safely imported and used in both client and server components
@@ -73,5 +75,25 @@ export async function scanDataDirectoryContent(
   dataDir: string,
   type: "manga" | "ln"
 ) {
-  return scanDataSubdirectories(dataDir, type);
+  try {
+    console.log(`Starting scan of ${type} content in ${dataDir}`);
+
+    if (type === "manga") {
+      console.log("Using manga scanner for .mokuro files");
+      return scanDataSubdirectories(dataDir, type);
+    } else {
+      console.log("Using light novel scanner for .epub files");
+      return scanLightNovelDirectory(dataDir);
+    }
+  } catch (error) {
+    console.error(`Error during ${type} scan:`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+      importedCount: 0,
+      failedCount: 0,
+      importedItems: [],
+      failedItems: [],
+    };
+  }
 }

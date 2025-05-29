@@ -54,6 +54,21 @@ export async function isDirectory(path: string): Promise<boolean> {
 }
 
 /**
+ * Check if a file exists and is accessible
+ */
+export async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    const fs = await import("fs/promises");
+    await fs.access(filePath);
+    const stats = await fs.stat(filePath);
+    return stats.isFile();
+  } catch (error) {
+    console.error(`File ${filePath} does not exist or is not accessible:`, error);
+    return false;
+  }
+}
+
+/**
  * Read a file
  */
 export async function readFile(filePath: string): Promise<string> {

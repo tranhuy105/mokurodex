@@ -22,9 +22,11 @@ model Manga {
   lastScanned   DateTime
   scanStatus    String   @default("pending")
   errorMessage  String?
+  contentType   String   @default("manga") // "manga" | "lightnovel"
 
   // Relations
   mangaVolumes      Volume[]
+  epubVolumes       EpubVolume[]
   userData          UserMangaMetadata?
   readingHistory    ReadingHistory[]
   mangaTags         MangaTag[]
@@ -88,6 +90,39 @@ model TextBlock {
   
   @@index([pageId])
 }
+
+model EpubVolume {
+  id            String   @id @default(cuid())
+  mangaId       String
+  volumeNumber  Int
+  volumeTitle   String
+  filePath      String   // Original EPUB file path
+  coverImage    String?  // Path to extracted cover image
+  addedDate     DateTime
+  lastModified  DateTime
+  metadata      String?  // Basic JSON metadata only
+  
+  // Relations
+  manga         Manga         @relation(fields: [mangaId], references: [id], onDelete: Cascade)
+  epubReadingHistory EpubReadingHistory[]
+  
+  @@index([mangaId])
+}
+
+// Simplified Reading History - just track chapter/position
+model EpubReadingHistory {
+  id            String   @id @default(cuid())
+  epubVolumeId  String
+  chapterHref   String   // Store the href instead of chapter ID
+  position      Float    // Reading position as percentage through chapter
+  timestamp     DateTime
+  
+  // Relations
+  epubVolume    EpubVolume  @relation(fields: [epubVolumeId], references: [id], onDelete: Cascade)
+  
+  @@index([epubVolumeId])
+}
+
 
 // Tag model
 model Tag {
