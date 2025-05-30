@@ -1,226 +1,322 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
-import {
-  fetchAllManga,
-  removeManga,
-  scanDataDirectoryContent,
-} from "@/actions/manga-api-prisma";
-import { Manga } from "@prisma/client";
 import { Spinner } from "@/components/ui/spinner";
-import toast from "react-hot-toast";
-import { ImportInstructions } from "./ImportInstructions";
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+    useAllContent,
+    useDeleteContent,
+    useScanContentDirectory,
+} from "@/hooks/use-content";
 import { useSettings } from "@/hooks/useSettings";
+import { Book, BookOpen } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { ContentList } from "../content/ContentList";
 import { DirectoryConfigDialog } from "./DirectoryConfigDialog";
-import { ScanControls } from "./ScanControls";
-import { ContentList } from "./ContentList";
+import { ImportInstructions } from "./ImportInstructions";
 import { ProgressIndicator } from "./ProgressIndicator";
 
 export function MangaScanController() {
-  const [isScanning, setIsScanning] = useState(false);
-  const [scannedManga, setScannedManga] = useState<Manga[]>([]);
-  const [showScanned, setShowScanned] = useState(false);
-  const [activeTab, setActiveTab] = useState<"manga" | "ln">("manga");
-  const [importProgress, setImportProgress] = useState({
-    current: 0,
-    total: 0,
-    currentItem: "",
-  });
-  const [progressPercentage, setProgressPercentage] = useState(0);
-  const [showProgressBar, setShowProgressBar] = useState(false);
-  const { isLoading: settingsLoading, mangaDir } = useSettings();
+    // Tab state
+    const [activeTab, setActiveTab] = useState<
+        "manga" | "ln"
+    >("manga");
 
-  // Update progress percentage whenever importProgress changes
-  useEffect(() => {
-    if (importProgress.total > 0 && importProgress.current > 0) {
-      const percentage = Math.round(
-        (importProgress.current / importProgress.total) * 100
-      );
-      setProgressPercentage(percentage);
-    } else {
-      setProgressPercentage(0);
-    }
-  }, [importProgress]);
-
-  const handleDelete = async (id: string) => {
-    try {
-      const success = await removeManga(id);
-      if (success) {
-        setScannedManga(scannedManga.filter((manga) => manga.id !== id));
-        toast.success("Content Removed");
-      } else {
-        toast.error("Removal Failed");
-      }
-    } catch {
-      toast.error("Removal Failed");
-    }
-  };
-
-  const loadDbManga = async () => {
-    setIsScanning(true);
-    try {
-      const manga = await fetchAllManga();
-      console.log(manga);
-      setScannedManga(manga);
-      setShowScanned(true);
-    } catch {
-      toast.error("Failed to Load Content");
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
-  // Function to scan a directory using the server action
-  const scanDirectory = async (type: "manga" | "ln") => {
-    if (!mangaDir) {
-      toast.error(
-        "Data directory not configured. Please set it in Settings first."
-      );
-      return;
-    }
-
-    setIsScanning(true);
-    setShowProgressBar(true);
-    setActiveTab(type);
-
-    // Show a persistent loading toast
-    const loadingToastId = toast.loading(
-      `Scanning ${type === "manga" ? "manga" : "light novel"} directory...`,
-      { duration: Infinity }
-    );
-
-    try {
-      // Set initial progress
-      setImportProgress({
+    // Progress tracking state
+    const [importProgress, setImportProgress] = useState({
         current: 0,
-        total: 1,
-        currentItem: `Preparing to scan ${type} directory...`,
-      });
+        total: 0,
+        currentItem: "",
+    });
+    const [progressPercentage, setProgressPercentage] =
+        useState(0);
+    const [showProgressBar, setShowProgressBar] =
+        useState(false);
 
-      // Use the server action to scan the directory
-      const result = await scanDataDirectoryContent(mangaDir, type);
+    // Hooks
+    const { isLoading: settingsLoading, mangaDir } =
+        useSettings();
+    const { mutate: removeContent } = useDeleteContent();
+    const {
+        data: allContent = [],
+        isLoading: contentLoading,
+        refetch: refetchContent,
+    } = useAllContent();
 
-      // Dismiss the loading toast
-      toast.dismiss(loadingToastId);
+    const { mutate: scanDirectory, isPending: isScanning } =
+        useScanContentDirectory();
 
-      if (result.success) {
-        // Load all manga to show updated list
-        const allManga = await fetchAllManga();
-        console.log("Fetched manga after scan:", allManga);
-        setScannedManga(allManga);
-        setShowScanned(true);
-        toast.success(
-          `Successfully imported ${result.importedCount} ${
-            type === "manga" ? "manga" : "light novels"
-          }`
-        );
-      } else {
-        if (result.error) {
-          toast.error(result.error);
+    // Update progress percentage whenever importProgress changes
+    useEffect(() => {
+        if (
+            importProgress.total > 0 &&
+            importProgress.current > 0
+        ) {
+            const percentage = Math.round(
+                (importProgress.current /
+                    importProgress.total) *
+                    100
+            );
+            setProgressPercentage(percentage);
         } else {
-          toast.error(
-            `No content could be imported from ${
-              type === "manga" ? "manga" : "light novel"
-            } directory`
-          );
+            setProgressPercentage(0);
         }
-      }
+    }, [importProgress]);
 
-      // Show failed imports if any
-      if (result.failedCount > 0) {
-        toast.error(`Failed to import ${result.failedCount} items`);
-      }
-    } catch (error) {
-      // Dismiss the loading toast
-      toast.dismiss(loadingToastId);
+    // Handle content deletion
+    const handleDelete = async (id: string) => {
+        removeContent(id, {
+            onSuccess: () => {
+                toast.success("Content Removed");
+                // Refresh content list after deletion
+                refetchContent();
+            },
+            onError: () => {
+                toast.error("Removal Failed");
+            },
+        });
+    };
 
-      console.error("Scan error:", error);
-      let errorMessage = "Unknown error occurred";
+    // Function to scan a directory using the server action
+    const handleScanDirectory = (type: "manga" | "ln") => {
+        if (!mangaDir) {
+            toast.error(
+                "Data directory not configured. Please set it in Settings first."
+            );
+            return;
+        }
 
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
+        setShowProgressBar(true);
+        setActiveTab(type);
 
-      toast.error(`Scan failed: ${errorMessage}`);
-    } finally {
-      setIsScanning(false);
-      setShowProgressBar(false);
-      setImportProgress({ current: 0, total: 0, currentItem: "" });
-    }
-  };
+        // Set initial progress
+        setImportProgress({
+            current: 0,
+            total: 1,
+            currentItem: `Preparing to scan ${type} directory...`,
+        });
 
-  // Filter manga by type (manga or ln) based on directory path
-  const filteredManga = scannedManga;
+        scanDirectory(
+            {
+                baseDir: mangaDir,
+                contentType: type,
+            },
+            {
+                onSuccess: (result) => {
+                    if (result.success) {
+                        toast.success(
+                            `Successfully imported ${
+                                result.importedCount
+                            } ${
+                                type === "manga"
+                                    ? "manga"
+                                    : "light novels"
+                            }`
+                        );
 
-  console.log("Filtered manga count:", filteredManga.length);
-  console.log("Total scanned manga count:", scannedManga.length);
+                        // If there were failures, show a warning
+                        if (result.failedCount > 0) {
+                            toast.warning(
+                                `Failed to import ${result.failedCount} items`
+                            );
+                        }
 
-  if (settingsLoading) {
-    return (
-      <div className="flex justify-center items-center p-8">
-        <Spinner className="h-8 w-8" />
-        <span className="ml-2">Loading settings...</span>
-      </div>
+                        // Refresh content after scan
+                        refetchContent();
+                    } else {
+                        toast.error(
+                            result.error ||
+                                `No content could be imported from ${
+                                    type === "manga"
+                                        ? "manga"
+                                        : "light novel"
+                                } directory`
+                        );
+                    }
+                },
+                onError: (error) => {
+                    toast.error(
+                        `Scan failed: ${error.message}`
+                    );
+                },
+                onSettled: () => {
+                    setShowProgressBar(false);
+                    setImportProgress({
+                        current: 0,
+                        total: 0,
+                        currentItem: "",
+                    });
+                },
+            }
+        );
+    };
+
+    // Filter content by type based on activeTab
+    const mangaContent = allContent.filter(
+        (content) => content.contentType === "manga"
     );
-  }
 
-  return (
-    <div className="space-y-6">
-      <ImportInstructions />
+    const lightNovelContent = allContent.filter(
+        (content) => content.contentType === "lightnovel"
+    );
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Content Scanner</CardTitle>
-          <CardDescription>
-            Scan your data directory for manga and light novels
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium">Data Directory</h3>
-                <p className="text-sm text-muted-foreground">
-                  {mangaDir || "Not configured"}
-                </p>
-              </div>
-              <DirectoryConfigDialog mangaDir={mangaDir || ""} />
+    if (settingsLoading) {
+        return (
+            <div className="flex justify-center items-center p-8">
+                <Spinner className="h-8 w-8" />
+                <span className="ml-2">
+                    Loading settings...
+                </span>
             </div>
+        );
+    }
 
-            <ScanControls
-              onScan={scanDirectory}
-              onLoadDatabase={loadDbManga}
-              isScanning={isScanning}
-              mangaDir={mangaDir}
-            />
+    return (
+        <div className="space-y-6">
+            <ImportInstructions />
 
-            <ProgressIndicator
-              isScanning={isScanning}
-              showProgressBar={showProgressBar}
-              progressPercentage={progressPercentage}
-              currentItem={importProgress.currentItem}
-              current={importProgress.current}
-              total={importProgress.total}
-            />
-          </div>
-        </CardContent>
-      </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Content Scanner</CardTitle>
+                    <CardDescription>
+                        Scan your data directory for manga
+                        and light novels
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-sm font-medium">
+                                    Data Directory
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                    {mangaDir ||
+                                        "Not configured"}
+                                </p>
+                            </div>
+                            <DirectoryConfigDialog
+                                mangaDir={mangaDir || ""}
+                            />
+                        </div>
 
-      {showScanned && (
-        <ContentList
-          contentType={activeTab}
-          contentList={filteredManga}
-          onDelete={handleDelete}
-          isLoading={isScanning}
-        />
-      )}
-    </div>
-  );
+                        <ProgressIndicator
+                            isScanning={isScanning}
+                            showProgressBar={
+                                showProgressBar
+                            }
+                            progressPercentage={
+                                progressPercentage
+                            }
+                            currentItem={
+                                importProgress.currentItem
+                            }
+                            current={importProgress.current}
+                            total={importProgress.total}
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Content Tabs */}
+            <Tabs
+                defaultValue="manga"
+                value={activeTab}
+                onValueChange={(value) =>
+                    setActiveTab(value as "manga" | "ln")
+                }
+            >
+                <TabsList className="grid grid-cols-2 mb-4">
+                    <TabsTrigger
+                        value="manga"
+                        className="flex items-center"
+                    >
+                        <Book className="h-4 w-4 mr-2" />
+                        Manga{" "}
+                        {mangaContent.length > 0 &&
+                            `(${mangaContent.length})`}
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="ln"
+                        className="flex items-center"
+                    >
+                        <BookOpen className="h-4 w-4 mr-2" />
+                        Light Novels{" "}
+                        {lightNovelContent.length > 0 &&
+                            `(${lightNovelContent.length})`}
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* Manga Tab Content */}
+                <TabsContent
+                    value="manga"
+                    className="space-y-4"
+                >
+                    <div className="flex justify-end">
+                        <button
+                            onClick={() =>
+                                handleScanDirectory("manga")
+                            }
+                            disabled={
+                                isScanning || !mangaDir
+                            }
+                            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+                        >
+                            Scan Manga Directory
+                        </button>
+                    </div>
+
+                    <ContentList
+                        contentType="manga"
+                        contentList={mangaContent}
+                        onDelete={handleDelete}
+                        isLoading={
+                            contentLoading || isScanning
+                        }
+                    />
+                </TabsContent>
+
+                {/* Light Novel Tab Content */}
+                <TabsContent
+                    value="ln"
+                    className="space-y-4"
+                >
+                    <div className="flex justify-end">
+                        <button
+                            onClick={() =>
+                                handleScanDirectory("ln")
+                            }
+                            disabled={
+                                isScanning || !mangaDir
+                            }
+                            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+                        >
+                            Scan Light Novel Directory
+                        </button>
+                    </div>
+
+                    <ContentList
+                        contentType="ln"
+                        contentList={lightNovelContent}
+                        onDelete={handleDelete}
+                        isLoading={
+                            contentLoading || isScanning
+                        }
+                    />
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
 }

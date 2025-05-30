@@ -1,532 +1,686 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
-  updateCollection,
-  addMangaToCollection,
-  removeMangaFromCollection,
-  searchMangaByTitle,
-} from "@/actions/manga-management-prisma";
+    addContentToCollection,
+    removeContentFromCollection,
+    updateCollection,
+} from "@/server/actions/content-management";
 import {
-  Upload,
-  X,
-  Image as ImageIcon,
-  Search,
-  Plus,
-  Book,
+    ContentWithUserData,
+    ExtendedCollection,
+} from "@/types/content";
+import {
+    Book,
+    Image as ImageIcon,
+    Plus,
+    Search,
+    Upload,
+    X,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { MangaMetadata } from "@/types/manga";
-import { Collection, UserMangaMetadata } from "@prisma/client";
-
-// Define the extended Collection type that includes mangaIds
-interface ExtendedCollection extends Collection {
-  mangaIds: string[];
-}
+import { useRouter } from "next/navigation";
+import React, { useState } from "react";
 
 interface EditCollectionFormProps {
-  collection: ExtendedCollection;
-  initialManga: Array<MangaMetadata & { userData: UserMangaMetadata | null }>;
+    collection: ExtendedCollection;
+    initialContent: ContentWithUserData[];
 }
 
 export function EditCollectionForm({
-  collection,
-  initialManga,
+    collection,
+    initialContent,
 }: EditCollectionFormProps) {
-  const router = useRouter();
+    const router = useRouter();
 
-  const [name, setName] = useState(collection.name);
-  const [description, setDescription] = useState(collection.description || "");
-  const [coverImage, setCoverImage] = useState<string | null>(
-    collection.coverImage || null
-  );
-  const [mangaIds, setMangaIds] = useState<string[]>(collection.mangaIds || []);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  // For adding manga
-  const [isAddingManga, setIsAddingManga] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<
-    Array<MangaMetadata & { userData: UserMangaMetadata | null }>
-  >([]);
-  const [currentManga, setCurrentManga] =
-    useState<Array<MangaMetadata & { userData: UserMangaMetadata | null }>>(
-      initialManga
+    const [name, setName] = useState(collection.name);
+    const [description, setDescription] = useState(
+        collection.description || ""
     );
+    const [coverImage, setCoverImage] = useState<
+        string | null
+    >(collection.coverImage || null);
+    const [contentIds, setContentIds] = useState<string[]>(
+        initialContent.map((content) => content.id) || []
+    );
+    const [errorMessage, setErrorMessage] = useState<
+        string | null
+    >(null);
+    const [successMessage, setSuccessMessage] = useState<
+        string | null
+    >(null);
 
-  // Handle cover image upload
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    // For adding content
+    const [isAddingContent, setIsAddingContent] =
+        useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [searchResults, setSearchResults] = useState<
+        ContentWithUserData[]
+    >([]);
+    const [currentContent, setCurrentContent] =
+        useState<ContentWithUserData[]>(initialContent);
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage("The image must be less than 5MB");
-      setTimeout(() => setErrorMessage(null), 3000);
-      return;
-    }
+    // Loading states
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [isAddingToCollection, setIsAddingToCollection] =
+        useState(false);
+    const [
+        isRemovingFromCollection,
+        setIsRemovingFromCollection,
+    ] = useState(false);
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setCoverImage(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
+    // Handle cover image upload
+    const handleImageUpload = (
+        e: React.ChangeEvent<HTMLInputElement>
+    ) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
-  // Remove the selected image
-  const removeImage = () => {
-    setCoverImage(null);
-  };
-
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!name.trim()) {
-      setErrorMessage("Please provide a name for the collection");
-      setTimeout(() => setErrorMessage(null), 3000);
-      return;
-    }
-
-    setIsSubmitting(true);
-    setErrorMessage(null);
-
-    try {
-      const result = await updateCollection(collection.id, {
-        name,
-        description: description || undefined,
-        coverImage: coverImage === null ? undefined : coverImage,
-        mangaIds,
-      });
-
-      if (result) {
-        setSuccessMessage("Collection has been updated successfully");
-        setTimeout(() => {
-          router.push(`/collections/${collection.id}`);
-        }, 1000);
-      } else {
-        throw new Error("Failed to update collection");
-      }
-    } catch (error) {
-      console.error("Error updating collection:", error);
-      setErrorMessage(
-        error instanceof Error ? error.message : "An unknown error occurred"
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Search for manga to add
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    try {
-      // Use the new advanced search function
-      const results = await searchMangaByTitle(searchQuery);
-
-      // Filter out manga that are already in the collection
-      const filteredResults = results.filter(
-        (manga) => !mangaIds.includes(manga.id)
-      );
-
-      setSearchResults(filteredResults);
-    } catch (error) {
-      console.error("Error searching manga:", error);
-      setErrorMessage("Failed to search manga");
-    }
-  };
-
-  // Handle key down in search field
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault(); // Prevent form submission
-      handleSearch();
-    }
-  };
-
-  // Add manga to collection
-  const handleAddManga = async (mangaId: string) => {
-    try {
-      const result = await addMangaToCollection(collection.id, mangaId);
-      if (result) {
-        // Update local state
-        setMangaIds((prev) => [...prev, mangaId]);
-
-        // Update displayed manga
-        const manga = searchResults.find((m) => m.id === mangaId);
-        if (manga) {
-          setCurrentManga((prev) => [...prev, manga]);
+        if (file.size > 5 * 1024 * 1024) {
+            setErrorMessage(
+                "The image must be less than 5MB"
+            );
+            setTimeout(() => setErrorMessage(null), 3000);
+            return;
         }
 
-        // Remove from search results
-        setSearchResults((prev) => prev.filter((m) => m.id !== mangaId));
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            setCoverImage(event.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
 
-        setSuccessMessage("Manga added to collection");
-        setTimeout(() => setSuccessMessage(null), 2000);
-      } else {
-        throw new Error("Failed to add manga to collection");
-      }
-    } catch (error) {
-      console.error("Error adding manga:", error);
-      setErrorMessage("Failed to add manga to collection");
-    }
-  };
+    // Remove the selected image
+    const removeImage = () => {
+        setCoverImage(null);
+    };
 
-  // Remove manga from collection
-  const handleRemoveManga = async (mangaId: string) => {
-    try {
-      const result = await removeMangaFromCollection(collection.id, mangaId);
-      if (result) {
-        // Update local state
-        setMangaIds((prev) => prev.filter((id) => id !== mangaId));
+    // Handle form submission
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
 
-        // Update displayed manga
-        setCurrentManga((prev) => prev.filter((m) => m.id !== mangaId));
+        if (!name.trim()) {
+            setErrorMessage(
+                "Please provide a name for the collection"
+            );
+            setTimeout(() => setErrorMessage(null), 3000);
+            return;
+        }
 
-        setSuccessMessage("Manga removed from collection");
-        setTimeout(() => setSuccessMessage(null), 2000);
-      } else {
-        throw new Error("Failed to remove manga from collection");
-      }
-    } catch (error) {
-      console.error("Error removing manga:", error);
-      setErrorMessage("Failed to remove manga from collection");
-    }
-  };
+        setIsUpdating(true);
+        try {
+            const result = await updateCollection(
+                collection.id,
+                {
+                    name,
+                    description: description || undefined,
+                    coverImage: coverImage || undefined,
+                    contentIds,
+                }
+            );
 
-  return (
-    <>
-      {/* Notification banners */}
-      {errorMessage && (
-        <div className="bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg mb-6">
-          {errorMessage}
-        </div>
-      )}
+            if (result) {
+                setSuccessMessage(
+                    "Collection has been updated successfully"
+                );
+                setTimeout(() => {
+                    router.push(
+                        `/collections/${collection.id}`
+                    );
+                }, 1000);
+            } else {
+                setErrorMessage(
+                    "Failed to update collection"
+                );
+            }
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to update collection"
+            );
+        } finally {
+            setIsUpdating(false);
+        }
+    };
 
-      {successMessage && (
-        <div className="bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg mb-6">
-          {successMessage}
-        </div>
-      )}
+    // Search for content to add
+    const handleSearch = async () => {
+        if (!searchQuery.trim()) {
+            setSearchResults([]);
+            return;
+        }
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 md:p-8">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Name field */}
-          <div className="space-y-2">
-            <label
-              htmlFor="name"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Collection Name
-            </label>
-            <input
-              id="name"
-              type="text"
-              placeholder="e.g., Favorites, Reading Now, Completed"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-600 dark:focus:border-orange-600"
-            />
-          </div>
+        try {
+            // Use the search content hook
+            const results = await fetch(
+                `/api/content/search?query=${encodeURIComponent(
+                    searchQuery
+                )}`
+            ).then((res) => res.json());
 
-          {/* Description field */}
-          <div className="space-y-2">
-            <label
-              htmlFor="description"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Description (optional)
-            </label>
-            <textarea
-              id="description"
-              placeholder="Describe this collection..."
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-600 dark:focus:border-orange-600"
-            />
-          </div>
+            // Filter out content that is already in the collection
+            const filteredResults = results.filter(
+                (content: ContentWithUserData) =>
+                    !contentIds.includes(content.id)
+            );
 
-          {/* Cover image upload */}
-          <div className="space-y-2">
-            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Cover Image (optional)
-            </span>
-            <div className="mt-1 flex items-center gap-6">
-              {coverImage ? (
-                <div className="relative w-40 h-40 rounded-md overflow-hidden">
-                  <Image
-                    src={coverImage}
-                    alt="Cover preview"
-                    fill
-                    className="object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={removeImage}
-                    className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full hover:bg-black/80"
-                  >
-                    <X className="h-4 w-4" />
-                    <span className="sr-only">Remove image</span>
-                  </button>
+            setSearchResults(filteredResults);
+        } catch (error) {
+            console.error(
+                "Error searching content:",
+                error
+            );
+            setErrorMessage("Failed to search content");
+        }
+    };
+
+    // Handle key down in search field
+    const handleSearchKeyDown = (
+        e: React.KeyboardEvent<HTMLInputElement>
+    ) => {
+        if (e.key === "Enter") {
+            e.preventDefault(); // Prevent form submission
+            handleSearch();
+        }
+    };
+
+    // Add content to collection
+    const handleAddContent = async (contentId: string) => {
+        setIsAddingToCollection(true);
+        try {
+            const success = await addContentToCollection({
+                contentId,
+                collectionId: collection.id,
+            });
+
+            if (success) {
+                // Update local state
+                setContentIds((prev) => [
+                    ...prev,
+                    contentId,
+                ]);
+
+                // Update displayed content
+                const content = searchResults.find(
+                    (c) => c.id === contentId
+                );
+                if (content) {
+                    setCurrentContent((prev) => [
+                        ...prev,
+                        content,
+                    ]);
+                }
+
+                // Remove from search results
+                setSearchResults((prev) =>
+                    prev.filter((c) => c.id !== contentId)
+                );
+
+                setSuccessMessage(
+                    "Content added to collection"
+                );
+                setTimeout(
+                    () => setSuccessMessage(null),
+                    2000
+                );
+            } else {
+                setErrorMessage(
+                    "Failed to add content to collection"
+                );
+            }
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to add content to collection"
+            );
+        } finally {
+            setIsAddingToCollection(false);
+        }
+    };
+
+    // Remove content from collection
+    const handleRemoveContent = async (
+        contentId: string
+    ) => {
+        setIsRemovingFromCollection(true);
+        try {
+            const success =
+                await removeContentFromCollection({
+                    contentId,
+                    collectionId: collection.id,
+                });
+
+            if (success) {
+                // Update local state
+                setContentIds((prev) =>
+                    prev.filter((id) => id !== contentId)
+                );
+
+                // Update displayed content
+                setCurrentContent((prev) =>
+                    prev.filter((c) => c.id !== contentId)
+                );
+
+                setSuccessMessage(
+                    "Content removed from collection"
+                );
+                setTimeout(
+                    () => setSuccessMessage(null),
+                    2000
+                );
+            } else {
+                setErrorMessage(
+                    "Failed to remove content from collection"
+                );
+            }
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to remove content from collection"
+            );
+        } finally {
+            setIsRemovingFromCollection(false);
+        }
+    };
+
+    return (
+        <>
+            {/* Notification banners */}
+            {errorMessage && (
+                <div className="bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg mb-6">
+                    {errorMessage}
                 </div>
-              ) : (
-                <div className="flex items-center justify-center w-40 h-40 bg-gray-100 dark:bg-gray-700 rounded-md">
-                  <ImageIcon className="w-12 h-12 text-gray-400" />
-                </div>
-              )}
+            )}
 
-              <div>
-                <label
-                  htmlFor="cover-upload"
-                  className={`flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium cursor-pointer ${
-                    coverImage
-                      ? "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
-                      : "bg-orange-600 hover:bg-orange-700 text-white border border-transparent"
-                  }`}
+            {successMessage && (
+                <div className="bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg mb-6">
+                    {successMessage}
+                </div>
+            )}
+
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 md:p-8">
+                <form
+                    onSubmit={handleSubmit}
+                    className="space-y-6"
                 >
-                  <Upload className="mr-2 h-4 w-4" />
-                  <span>{coverImage ? "Change image" : "Upload image"}</span>
-                  <input
-                    id="cover-upload"
-                    name="cover-upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="sr-only"
-                  />
-                </label>
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  PNG, JPG, GIF up to 5MB
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Manga in collection */}
-          <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                Manga in this collection
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsAddingManga(!isAddingManga)}
-                className="flex items-center px-3 py-1 text-sm bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-colors"
-              >
-                {isAddingManga ? (
-                  <>
-                    <X className="mr-1 h-4 w-4" />
-                    <span>Cancel</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="mr-1 h-4 w-4" />
-                    <span>Add Manga</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Manga search panel */}
-            {isAddingManga && (
-              <div className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700 mb-6">
-                <div className="flex gap-3 mb-4">
-                  <div className="relative flex-1">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <Search className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Search manga by title..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={handleSearchKeyDown}
-                      className="w-full pl-10 px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200"
-                    />
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery("")}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSearch}
-                    className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors flex items-center shadow-sm"
-                  >
-                    <Search className="h-5 w-5" />
-                    <span className="ml-2 hidden sm:inline">Search</span>
-                  </button>
-                </div>
-
-                {searchResults.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-                    {searchResults.map((manga) => (
-                      <div
-                        key={manga.id}
-                        className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:shadow-md transition-shadow"
-                      >
-                        {manga.coverImage ? (
-                          <div className="relative h-16 w-12 flex-shrink-0 rounded-md overflow-hidden shadow-sm">
-                            <Image
-                              src={manga.coverImage}
-                              alt={manga.title}
-                              fill
-                              className="object-cover"
-                              sizes="48px"
-                            />
-                          </div>
-                        ) : (
-                          <div className="h-16 w-12 flex-shrink-0 bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center">
-                            <Book className="h-6 w-6 text-gray-400" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                            {manga.title}
-                          </h4>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {manga.volumes} volume
-                            {manga.volumes !== 1 ? "s" : ""}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleAddManga(manga.id)}
-                          className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full hover:bg-green-200 dark:hover:bg-green-800/40 transition-colors"
-                          aria-label="Add to collection"
+                    {/* Name field */}
+                    <div className="space-y-2">
+                        <label
+                            htmlFor="name"
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                         >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : searchQuery ? (
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800/30 rounded-lg p-6 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                      <Book className="h-10 w-10 text-yellow-500 dark:text-yellow-400 mb-3" />
-                      <p className="text-yellow-800 dark:text-yellow-200 font-medium mb-1">
-                        No matching manga found
-                      </p>
-                      <p className="text-yellow-600 dark:text-yellow-300 text-sm">
-                        Try a different search term
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                      <Search className="h-10 w-10 text-gray-400 dark:text-gray-500 mb-3" />
-                      <p className="text-gray-600 dark:text-gray-300 font-medium">
-                        Type something to search
-                      </p>
-                      <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                        Search supports Japanese characters and partial matching
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Current manga list */}
-            {currentManga.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {currentManga.map((manga) => (
-                  <div
-                    key={manga.id}
-                    className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:shadow-md transition-all duration-200"
-                  >
-                    {manga.coverImage ? (
-                      <div className="relative h-20 w-14 flex-shrink-0 rounded-md overflow-hidden shadow-sm">
-                        <Image
-                          src={manga.coverImage}
-                          alt={manga.title}
-                          fill
-                          className="object-cover"
-                          sizes="56px"
+                            Collection Name
+                        </label>
+                        <input
+                            id="name"
+                            type="text"
+                            placeholder="e.g., Favorites, Reading Now, Completed"
+                            value={name}
+                            onChange={(e) =>
+                                setName(e.target.value)
+                            }
+                            required
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-600 dark:focus:border-orange-600"
                         />
-                      </div>
-                    ) : (
-                      <div className="h-20 w-14 flex-shrink-0 bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center">
-                        <Book className="h-8 w-8 text-gray-400" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                        {manga.title}
-                      </h4>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                        {manga.volumes} volume{manga.volumes !== 1 ? "s" : ""}
-                      </p>
-                      <div className="flex items-center">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">
-                          In collection
-                        </span>
-                      </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveManga(manga.id)}
-                      className="p-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full hover:bg-red-200 dark:hover:bg-red-800/40 transition-colors"
-                      aria-label="Remove from collection"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center">
-                <div className="flex flex-col items-center justify-center">
-                  <Book className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" />
-                  <h3 className="text-gray-500 dark:text-gray-400 font-medium mb-1">
-                    No manga in this collection yet
-                  </h3>
-                  <p className="text-gray-400 dark:text-gray-500 text-sm">
-                    {" "}
-                    Click &quot;Add Manga&quot; to start adding manga to this
-                    collection{" "}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
 
-          {/* Action buttons */}
-          <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <Link href={`/collections/${collection.id}`}>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
-              >
-                Cancel
-              </button>
-            </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-colors disabled:opacity-50"
-            >
-              {isSubmitting ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </>
-  );
+                    {/* Description field */}
+                    <div className="space-y-2">
+                        <label
+                            htmlFor="description"
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                        >
+                            Description (optional)
+                        </label>
+                        <textarea
+                            id="description"
+                            placeholder="Add a description for your collection"
+                            value={description}
+                            onChange={(e) =>
+                                setDescription(
+                                    e.target.value
+                                )
+                            }
+                            rows={4}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-600 dark:focus:border-orange-600"
+                        />
+                    </div>
+
+                    {/* Cover Image field */}
+                    <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Cover Image (optional)
+                        </label>
+                        <div className="flex items-start space-x-6">
+                            {/* Image preview */}
+                            <div className="relative flex-shrink-0">
+                                {coverImage ? (
+                                    <div className="relative h-40 w-40 rounded-md overflow-hidden">
+                                        <Image
+                                            src={coverImage}
+                                            alt="Collection cover"
+                                            fill
+                                            className="object-cover"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={
+                                                removeImage
+                                            }
+                                            className="absolute top-2 right-2 bg-black/60 text-white p-1 rounded-full hover:bg-black/80 transition-colors"
+                                        >
+                                            <X className="h-4 w-4" />
+                                            <span className="sr-only">
+                                                Remove image
+                                            </span>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="h-40 w-40 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
+                                        <ImageIcon className="h-10 w-10 mb-2" />
+                                        <span className="text-sm">
+                                            No image
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Upload button */}
+                            <div className="flex-1 pt-2">
+                                <label
+                                    htmlFor="cover-upload"
+                                    className="flex items-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none cursor-pointer"
+                                >
+                                    <Upload className="h-4 w-4 mr-2" />
+                                    {coverImage
+                                        ? "Change image"
+                                        : "Upload image"}
+                                </label>
+                                <input
+                                    id="cover-upload"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={
+                                        handleImageUpload
+                                    }
+                                    className="sr-only"
+                                />
+                                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                    PNG, JPG, GIF up to 5MB
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Content in Collection section */}
+                    <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                                Content in Collection
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setIsAddingContent(
+                                        !isAddingContent
+                                    )
+                                }
+                                className="flex items-center px-3 py-1.5 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                            >
+                                <Plus className="h-4 w-4 mr-1.5" />
+                                Add Content
+                            </button>
+                        </div>
+
+                        {/* Current content list */}
+                        {currentContent.length > 0 ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                {currentContent.map(
+                                    (content) => (
+                                        <div
+                                            key={content.id}
+                                            className="flex items-center bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md p-3 relative group"
+                                        >
+                                            {/* Thumbnail */}
+                                            <div className="w-12 h-16 bg-gray-100 dark:bg-gray-600 rounded overflow-hidden flex-shrink-0">
+                                                {content.coverImage ? (
+                                                    <Image
+                                                        src={
+                                                            content.coverImage
+                                                        }
+                                                        alt={
+                                                            content.title
+                                                        }
+                                                        width={
+                                                            48
+                                                        }
+                                                        height={
+                                                            64
+                                                        }
+                                                        className="object-cover w-full h-full"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center">
+                                                        <Book className="h-6 w-6 text-gray-400" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Content info */}
+                                            <div className="ml-3 flex-1 min-w-0">
+                                                <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                                    {
+                                                        content.title
+                                                    }
+                                                </h4>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                    {
+                                                        content.volumes
+                                                    }{" "}
+                                                    {content.volumes ===
+                                                    1
+                                                        ? "volume"
+                                                        : "volumes"}
+                                                </p>
+                                            </div>
+
+                                            {/* Remove button */}
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    handleRemoveContent(
+                                                        content.id
+                                                    )
+                                                }
+                                                disabled={
+                                                    isRemovingFromCollection
+                                                }
+                                                className="absolute top-1 right-1 bg-white/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <X className="h-4 w-4" />
+                                                <span className="sr-only">
+                                                    Remove
+                                                </span>
+                                            </button>
+                                        </div>
+                                    )
+                                )}
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 px-4 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50">
+                                <Book className="mx-auto h-10 w-10 text-gray-400" />
+                                <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                                    No content in collection
+                                </h3>
+                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    Add some content to your
+                                    collection.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Search and add content panel */}
+                        {isAddingContent && (
+                            <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-md p-4 space-y-4">
+                                <h4 className="font-medium text-gray-900 dark:text-white">
+                                    Add Content to
+                                    Collection
+                                </h4>
+
+                                {/* Search box */}
+                                <div className="flex items-center">
+                                    <div className="relative flex-1">
+                                        <input
+                                            type="text"
+                                            placeholder="Search by title..."
+                                            value={
+                                                searchQuery
+                                            }
+                                            onChange={(e) =>
+                                                setSearchQuery(
+                                                    e.target
+                                                        .value
+                                                )
+                                            }
+                                            onKeyDown={
+                                                handleSearchKeyDown
+                                            }
+                                            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                        />
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Search className="h-4 w-4 text-gray-400" />
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={
+                                            handleSearch
+                                        }
+                                        className="ml-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                                    >
+                                        Search
+                                    </button>
+                                </div>
+
+                                {/* Search results */}
+                                {searchResults.length >
+                                0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto p-1">
+                                        {searchResults.map(
+                                            (content) => (
+                                                <div
+                                                    key={
+                                                        content.id
+                                                    }
+                                                    className="flex items-center bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md p-3"
+                                                >
+                                                    {/* Thumbnail */}
+                                                    <div className="w-12 h-16 bg-gray-100 dark:bg-gray-600 rounded overflow-hidden flex-shrink-0">
+                                                        {content.coverImage ? (
+                                                            <Image
+                                                                src={
+                                                                    content.coverImage
+                                                                }
+                                                                alt={
+                                                                    content.title
+                                                                }
+                                                                width={
+                                                                    48
+                                                                }
+                                                                height={
+                                                                    64
+                                                                }
+                                                                className="object-cover w-full h-full"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center">
+                                                                <Book className="h-6 w-6 text-gray-400" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Content info */}
+                                                    <div className="ml-3 flex-1 min-w-0">
+                                                        <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                                            {
+                                                                content.title
+                                                            }
+                                                        </h4>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                            {
+                                                                content.volumes
+                                                            }{" "}
+                                                            {content.volumes ===
+                                                            1
+                                                                ? "volume"
+                                                                : "volumes"}
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Add button */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            handleAddContent(
+                                                                content.id
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            isAddingToCollection
+                                                        }
+                                                        className="ml-2 p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full hover:bg-orange-200 dark:hover:bg-orange-800/40 focus:outline-none"
+                                                    >
+                                                        <Plus className="h-4 w-4" />
+                                                        <span className="sr-only">
+                                                            Add
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                            )
+                                        )}
+                                    </div>
+                                ) : searchQuery ? (
+                                    <div className="text-center py-6">
+                                        <p className="text-gray-500 dark:text-gray-400">
+                                            No results
+                                            found. Try a
+                                            different search
+                                            term.
+                                        </p>
+                                    </div>
+                                ) : null}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Form buttons */}
+                    <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <Link
+                            href={`/collections/${collection.id}`}
+                        >
+                            <button
+                                type="button"
+                                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            >
+                                Cancel
+                            </button>
+                        </Link>
+                        <button
+                            type="submit"
+                            disabled={isUpdating}
+                            className="px-4 py-2 bg-orange-600 text-white rounded-md shadow-sm text-sm font-medium hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isUpdating
+                                ? "Saving..."
+                                : "Save Changes"}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </>
+    );
 }
