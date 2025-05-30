@@ -2,7 +2,6 @@
 
 import { cn } from "@/lib/utils";
 import JSZip from "jszip";
-import { Settings2, X } from "lucide-react";
 import {
     useEffect,
     useMemo,
@@ -10,12 +9,9 @@ import {
     useState,
 } from "react";
 import { parseStringPromise } from "xml2js";
-import { ReaderSettings } from "./ReaderSettings";
 
 interface SimpleEpubReaderProps {
     epubData: ArrayBuffer;
-    onClose?: () => void;
-    title?: string;
 }
 
 interface ManifestItem {
@@ -24,20 +20,12 @@ interface ManifestItem {
     "media-type": string;
 }
 
-type FontSize = "small" | "medium" | "large";
-
 export function SimpleEpubReader({
     epubData,
-    onClose,
-    title,
 }: SimpleEpubReaderProps) {
     const [content, setContent] = useState<string>("");
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [showSettings, setShowSettings] = useState(false);
-    const [fontSize, setFontSize] =
-        useState<FontSize>("medium");
-    const [showControls] = useState(true);
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Memoize the epubData to prevent unnecessary re-renders
@@ -680,7 +668,7 @@ export function SimpleEpubReader({
                                             }
                                         );
 
-                                    return `<div class="chapter">${chapterContent}</div>`;
+                                    return `<div class="chapter" data-chapter-id="${item.id}">${chapterContent}</div>`;
                                 }
                                 return "";
                             }
@@ -746,30 +734,7 @@ export function SimpleEpubReader({
         };
     }, [memoizedEpubData]);
 
-    // Handle font size change
-    const handleFontSizeChange = (size: string) => {
-        setFontSize(size as FontSize);
-    };
-
-    // Get font size class
-    const getFontSizeClass = () => {
-        switch (fontSize) {
-            case "small":
-                return "text-sm";
-            case "large":
-                return "text-xl";
-            case "medium":
-            default:
-                return "text-base";
-        }
-    };
-
-    // Toggle settings
-    const toggleSettings = () => {
-        setShowSettings(!showSettings);
-    };
-
-    // Handle anchor clicks for table of contents navigation
+    // Handle anchor clicks for navigation
     useEffect(() => {
         if (!isLoading && containerRef.current) {
             // Add click event listener for anchor links
@@ -832,55 +797,10 @@ export function SimpleEpubReader({
                 </div>
             )}
 
-            {/* Settings button */}
-            <button
-                onClick={toggleSettings}
-                className="fixed bottom-16 right-4 z-20 bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-full shadow-lg transition-all"
-                aria-label="Settings"
-            >
-                <Settings2 size={22} />
-            </button>
-
-            {/* Navigation buttons */}
-            <div
-                className={`fixed top-4 left-0 right-0 z-20 transition-opacity duration-300 flex justify-between items-center px-4 ${
-                    showControls
-                        ? "opacity-100"
-                        : "opacity-0"
-                }`}
-            >
-                {/* Left side buttons */}
-                <div className="flex items-center space-x-2">
-                    <h2 className="text-white text-sm font-medium truncate">
-                        {title || "Light Novel Reader"}
-                    </h2>
-                </div>
-
-                {/* Right side buttons */}
-                {onClose && (
-                    <button
-                        onClick={onClose}
-                        className="flex items-center justify-center w-10 h-10 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full shadow-lg transition-all"
-                        aria-label="Close"
-                    >
-                        <X size={18} />
-                    </button>
-                )}
-            </div>
-
-            {/* Settings panel */}
-            {showSettings && (
-                <ReaderSettings
-                    onClose={() => setShowSettings(false)}
-                    onFontSizeChange={handleFontSizeChange}
-                    currentFontSize={fontSize}
-                />
-            )}
-
             {/* Content area */}
             <div
                 ref={containerRef}
-                className="flex-1 overflow-auto light-novel-reader p-4 md:p-8"
+                className="flex-1 overflow-auto light-novel-reader p-4 md:p-8 pt-16"
             >
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center h-full">
@@ -899,8 +819,7 @@ export function SimpleEpubReader({
                     <div className="max-w-3xl mx-auto">
                         <div
                             className={cn(
-                                "light-novel-content text-white",
-                                getFontSizeClass()
+                                "light-novel-content text-white"
                             )}
                             dangerouslySetInnerHTML={{
                                 __html: content,

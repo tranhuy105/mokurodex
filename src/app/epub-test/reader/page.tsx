@@ -16,7 +16,6 @@ export default function EpubReaderTest() {
     const [error, setError] = useState<string | null>(null);
     const [epubData, setEpubData] =
         useState<ArrayBuffer | null>(null);
-    const [title, setTitle] = useState<string>("");
 
     // Function to load the EPUB file as ArrayBuffer
     const loadEpub = async () => {
@@ -45,9 +44,6 @@ export default function EpubReaderTest() {
             // Get the ArrayBuffer from the response
             const data = await response.arrayBuffer();
             setEpubData(data);
-
-            // Set a title for the reader
-            setTitle(`${mangaId} - Volume ${volumeNumber}`);
         } catch (err) {
             console.error("Error loading EPUB:", err);
             setError(
@@ -62,17 +58,8 @@ export default function EpubReaderTest() {
         }
     };
 
-    // Handle closing the reader
-    const handleCloseReader = () => {
-        setEpubData(null);
-    };
-
     return (
-        <div className="p-4 min-h-screen bg-gray-50 dark:bg-gray-900">
-            <h1 className="text-2xl font-bold mb-4">
-                Light Novel Reader
-            </h1>
-
+        <div className="md:p-4 min-h-screen bg-gray-50 dark:bg-gray-900">
             {!epubData ? (
                 <div className="max-w-md mx-auto bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                     <p className="mb-6 text-gray-600 dark:text-gray-300">
@@ -150,12 +137,8 @@ export default function EpubReaderTest() {
                     </div>
                 </div>
             ) : (
-                <div className="h-[calc(100vh-120px)] bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-                    <SimpleEpubReader
-                        epubData={epubData}
-                        onClose={handleCloseReader}
-                        title={title}
-                    />
+                <div className="top-[120px] bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                    <SimpleEpubReader epubData={epubData} />
                 </div>
             )}
         </div>

@@ -424,3 +424,9 @@ html {
 .dark .light-novel-reader::-webkit-scrollbar-thumb:hover {
   background-color: rgba(100, 100, 100, 0.8);
 }
+
+.toc-anchor {
+  position: relative;
+  top: -20px; /* Offset to account for any fixed headers */
+  visibility: hidden;
+}
