@@ -1,54 +1,90 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { createTag } from "@/actions/manga-management-prisma";
+import { createTag } from "@/server/actions/content-management";
+import { db } from "@/server/db/client";
 import { Tag } from "@prisma/client";
 
 // Popular genres with colors
 const GENRES: Array<Omit<Tag, "id">> = [
-  { name: "Action", type: "genre", color: "red" },
-  { name: "Adventure", type: "genre", color: "amber" },
-  { name: "Comedy", type: "genre", color: "yellow" },
-  { name: "Drama", type: "genre", color: "orange" },
-  { name: "Fantasy", type: "genre", color: "purple" },
-  { name: "Horror", type: "genre", color: "gray" },
-  { name: "Mystery", type: "genre", color: "indigo" },
-  { name: "Romance", type: "genre", color: "pink" },
-  { name: "Sci-Fi", type: "genre", color: "cyan" },
-  { name: "Slice of Life", type: "genre", color: "green" },
-  { name: "Sports", type: "genre", color: "lime" },
-  { name: "Supernatural", type: "genre", color: "violet" },
-  { name: "Thriller", type: "genre", color: "rose" },
-  { name: "Historical", type: "genre", color: "amber" },
-  { name: "Mecha", type: "genre", color: "gray" },
-  { name: "Music", type: "genre", color: "fuchsia" },
-  { name: "Psychological", type: "genre", color: "indigo" },
-  { name: "Isekai", type: "genre", color: "teal" },
+    { name: "Action", type: "genre", color: "red" },
+    { name: "Adventure", type: "genre", color: "amber" },
+    { name: "Comedy", type: "genre", color: "yellow" },
+    { name: "Drama", type: "genre", color: "orange" },
+    { name: "Fantasy", type: "genre", color: "purple" },
+    { name: "Horror", type: "genre", color: "gray" },
+    { name: "Mystery", type: "genre", color: "indigo" },
+    { name: "Romance", type: "genre", color: "pink" },
+    { name: "Sci-Fi", type: "genre", color: "cyan" },
+    {
+        name: "Slice of Life",
+        type: "genre",
+        color: "green",
+    },
+    { name: "Sports", type: "genre", color: "lime" },
+    {
+        name: "Supernatural",
+        type: "genre",
+        color: "violet",
+    },
+    { name: "Thriller", type: "genre", color: "rose" },
+    { name: "Historical", type: "genre", color: "amber" },
+    { name: "Mecha", type: "genre", color: "gray" },
+    { name: "Music", type: "genre", color: "fuchsia" },
+    {
+        name: "Psychological",
+        type: "genre",
+        color: "indigo",
+    },
+    { name: "Isekai", type: "genre", color: "teal" },
 ];
 
 // Common content tags
 const CONTENT_TAGS: Array<Omit<Tag, "id">> = [
-  { name: "Shounen", type: "content", color: "blue" },
-  { name: "Shoujo", type: "content", color: "pink" },
-  { name: "Seinen", type: "content", color: "gray" },
-  { name: "Josei", type: "content", color: "purple" },
-  { name: "Harem", type: "content", color: "red" },
-  { name: "Reverse Harem", type: "content", color: "rose" },
-  { name: "School Life", type: "content", color: "sky" },
-  { name: "Magic", type: "content", color: "violet" },
-  { name: "Gore", type: "content", color: "red" },
-  { name: "Martial Arts", type: "content", color: "amber" },
-  { name: "Military", type: "content", color: "green" },
-  { name: "Super Power", type: "content", color: "yellow" },
-  { name: "Demons", type: "content", color: "red" },
-  { name: "Vampire", type: "content", color: "red" },
-  { name: "Ecchi", type: "content", color: "pink" },
-  { name: "Supernatural", type: "content", color: "indigo" },
-  { name: "Time Travel", type: "content", color: "blue" },
-  { name: "Cooking", type: "content", color: "amber" },
-  { name: "Reincarnation", type: "content", color: "teal" },
-  { name: "Office", type: "content", color: "blue" },
-  { name: "Crossdressing", type: "content", color: "fuchsia" },
+    { name: "Shounen", type: "content", color: "blue" },
+    { name: "Shoujo", type: "content", color: "pink" },
+    { name: "Seinen", type: "content", color: "gray" },
+    { name: "Josei", type: "content", color: "purple" },
+    { name: "Harem", type: "content", color: "red" },
+    {
+        name: "Reverse Harem",
+        type: "content",
+        color: "rose",
+    },
+    { name: "School Life", type: "content", color: "sky" },
+    { name: "Magic", type: "content", color: "violet" },
+    { name: "Gore", type: "content", color: "red" },
+    {
+        name: "Martial Arts",
+        type: "content",
+        color: "amber",
+    },
+    { name: "Military", type: "content", color: "green" },
+    {
+        name: "Super Power",
+        type: "content",
+        color: "yellow",
+    },
+    { name: "Demons", type: "content", color: "red" },
+    { name: "Vampire", type: "content", color: "red" },
+    { name: "Ecchi", type: "content", color: "pink" },
+    {
+        name: "Supernatural",
+        type: "content",
+        color: "indigo",
+    },
+    { name: "Time Travel", type: "content", color: "blue" },
+    { name: "Cooking", type: "content", color: "amber" },
+    {
+        name: "Reincarnation",
+        type: "content",
+        color: "teal",
+    },
+    { name: "Office", type: "content", color: "blue" },
+    {
+        name: "Crossdressing",
+        type: "content",
+        color: "fuchsia",
+    },
 ];
 
 /**
@@ -56,36 +92,45 @@ const CONTENT_TAGS: Array<Omit<Tag, "id">> = [
  * if they don't already exist
  */
 export async function initializeTags(): Promise<{
-  created: number;
-  existing: number;
+    created: number;
+    existing: number;
 }> {
-  try {
-    const existingTags = await prisma.tag.findMany();
-    const existingTagNames = new Set(
-      existingTags.map((tag) => tag.name.toLowerCase())
-    );
+    try {
+        const existingTags = await db.tag.findMany();
+        const existingTagNames = new Set(
+            existingTags.map((tag) =>
+                tag.name.toLowerCase()
+            )
+        );
 
-    let created = 0;
-    const allTags = [...GENRES, ...CONTENT_TAGS];
+        let created = 0;
+        const allTags = [...GENRES, ...CONTENT_TAGS];
 
-    for (const tag of allTags) {
-      // Only create tags that don't exist
-      if (!existingTagNames.has(tag.name.toLowerCase())) {
-        await createTag({
-          name: tag.name,
-          color: tag.color || undefined,
-          type: tag.type as "content" | "genre" | "custom",
-        });
-        created++;
-      }
+        for (const tag of allTags) {
+            // Only create tags that don't exist
+            if (
+                !existingTagNames.has(
+                    tag.name.toLowerCase()
+                )
+            ) {
+                await createTag({
+                    name: tag.name,
+                    color: tag.color || undefined,
+                    type: tag.type as
+                        | "content"
+                        | "genre"
+                        | "custom",
+                });
+                created++;
+            }
+        }
+
+        return {
+            created,
+            existing: existingTags.length,
+        };
+    } catch (error) {
+        console.error("Error initializing tags:", error);
+        throw error;
     }
-
-    return {
-      created,
-      existing: existingTags.length,
-    };
-  } catch (error) {
-    console.error("Error initializing tags:", error);
-    throw error;
-  }
 }

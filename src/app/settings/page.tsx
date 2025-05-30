@@ -425,7 +425,7 @@ export default function SettingsPage() {
                 <div className="space-y-3">
                   <div className="pt-1">
                     <label className="text-sm font-medium mb-2 block">
-                      Manga Directory
+                      Data Directory
                     </label>
                     <input
                       type="text"
@@ -433,8 +433,9 @@ export default function SettingsPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md dark:border-gray-700 dark:bg-gray-800"
                     />
                     <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">
-                      The directory where your manga files are stored. Restart
-                      required.
+                      The directory where your manga files are stored. The app
+                      will scan manga/ and ln/ subdirectories in this location.
+                      Restart required.
                     </p>
                   </div>
 

@@ -46,7 +46,9 @@ export function getMangaPageUrl(
   volumeId: string,
   pageNumber: number
 ): string {
-  return `/manga/${encodeURIComponent(mangaId)}/${volumeId}/${pageNumber}`;
+  return `/reader/manga/${encodeURIComponent(
+      mangaId
+  )}/${volumeId}/${pageNumber}`;
 }
 
 /**

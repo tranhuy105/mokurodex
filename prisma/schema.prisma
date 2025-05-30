@@ -10,8 +10,8 @@ datasource db {
   url      = "file:../data/manga-management.db"
 }
 
-// Manga model
-model Manga {
+// Unified Content model
+model Content {
   id            String   @id
   title         String
   volumes       Int      @default(0)
@@ -22,19 +22,20 @@ model Manga {
   lastScanned   DateTime
   scanStatus    String   @default("pending")
   errorMessage  String?
+  contentType   String   @default("manga") // "manga" | "lightnovel"
 
   // Relations
-  mangaVolumes      Volume[]
-  userData          UserMangaMetadata?
-  readingHistory    ReadingHistory[]
-  mangaTags         MangaTag[]
-  collectionManga   CollectionManga[]
+  contentVolumes   Volume[]
+  userData         UserContentMetadata?
+  readingHistory   ReadingHistory[]
+  contentTags      ContentTag[]
+  collectionContent CollectionContent[]
 }
 
-// Volume model
+// Unified Volume model
 model Volume {
   id            String   @id
-  mangaId       String
+  contentId     String
   volumeNumber  Int
   volumeTitle   String
   filePath      String
@@ -44,13 +45,15 @@ model Volume {
   lastModified  DateTime
   volumeUuid    String
   previewImages String?  // JSON array of preview image paths
+  volumeType    String   @default("manga") // "manga" | "epub"
+  metadata      String?  // JSON metadata for epub volumes
 
   // Relations
-  manga           Manga             @relation(fields: [mangaId], references: [id], onDelete: Cascade)
-  readingHistory  ReadingHistory[]
-  pages           Page[]
+  content          Content          @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  readingHistory   ReadingHistory[]
+  pages            Page[]
 
-  @@index([mangaId])
+  @@index([contentId])
 }
 
 // Page model - represents a single page in a volume
@@ -89,6 +92,23 @@ model TextBlock {
   @@index([pageId])
 }
 
+// Reading Position model - unified for both manga pages and epub positions
+model ReadingHistory {
+  id            String   @id
+  contentId     String
+  volumeId      String
+  position      Int      // Page number for manga, percentage (0-100) for epub
+  chapterHref   String?  // Only used for epub volumes
+  timestamp     DateTime
+
+  // Relations
+  content       Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  volume        Volume   @relation(fields: [volumeId], references: [id], onDelete: Cascade)
+
+  @@index([contentId])
+  @@index([volumeId])
+}
+
 // Tag model
 model Tag {
   id    String @id
@@ -97,7 +117,7 @@ model Tag {
   type  String // "genre" | "content" | "custom"
 
   // Relations
-  mangaTags MangaTag[]
+  contentTags ContentTag[]
 }
 
 // Collection model
@@ -110,41 +130,45 @@ model Collection {
   updatedAt   DateTime
 
   // Relations
-  collectionManga CollectionManga[]
+  collectionContent CollectionContent[]
 }
 
-// MangaTag join model
-model MangaTag {
-  mangaId String
+// ContentTag join model
+model ContentTag {
+  contentId String
   tagId   String
 
   // Relations
-  manga Manga @relation(fields: [mangaId], references: [id], onDelete: Cascade)
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
   tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
-  @@id([mangaId, tagId])
-  @@index([mangaId])
+  @@id([contentId, tagId])
+  @@index([contentId])
   @@index([tagId])
+
+  @@unique([contentId, tagId])
 }
 
-// CollectionManga join model
-model CollectionManga {
+// CollectionContent join model
+model CollectionContent {
   collectionId String
-  mangaId      String
+  contentId    String
 
   // Relations
   collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  manga      Manga      @relation(fields: [mangaId], references: [id], onDelete: Cascade)
+  content    Content    @relation(fields: [contentId], references: [id], onDelete: Cascade)
 
-  @@id([collectionId, mangaId])
+  @@id([collectionId, contentId])
   @@index([collectionId])
-  @@index([mangaId])
+  @@index([contentId])
+
+  @@unique([collectionId, contentId])
 }
 
-// UserMangaMetadata model
-model UserMangaMetadata {
+// UserContentMetadata model
+model UserContentMetadata {
   id           String   @id
-  mangaId      String   @unique
+  contentId    String   @unique
   rating       Float?
   progress     Int?
   status       String?  // "reading" | "completed" | "on-hold" | "dropped" | "plan-to-read"
@@ -159,23 +183,7 @@ model UserMangaMetadata {
   updatedAt    DateTime
 
   // Relations
-  manga Manga @relation(fields: [mangaId], references: [id], onDelete: Cascade)
-}
-
-// ReadingHistory model
-model ReadingHistory {
-  id        String   @id
-  mangaId   String
-  volumeId  String
-  page      Int
-  timestamp DateTime
-
-  // Relations
-  manga  Manga  @relation(fields: [mangaId], references: [id], onDelete: Cascade)
-  volume Volume @relation(fields: [volumeId], references: [id], onDelete: Cascade)
-
-  @@index([mangaId])
-  @@index([volumeId])
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
 }
 
 // Settings model
