@@ -1,38 +1,26 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/Skeleton";
 import {
     useCreateTag,
     useDeleteTag,
     useTags,
+    useUpdateTag,
 } from "@/hooks/use-content-management";
 import { cn } from "@/lib/utils";
 import { Tag, TagType } from "@/types/content";
 import {
-    Check,
-    Loader2,
+    Bookmark,
+    Hash,
+    Palette,
     Plus,
+    Search,
     Tag as TagIcon,
-    X,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { TagDialog } from "./TagDialog";
+import { TagItem } from "./TagItem";
+import { AVAILABLE_COLORS } from "./constants";
 
 interface TagManagementProps {
     selectedTagIds?: string[];
@@ -40,6 +28,7 @@ interface TagManagementProps {
     onTagsChange?: () => void;
     showInline?: boolean;
     isLoading?: boolean;
+    isUpdating?: boolean;
 }
 
 export function TagManagement({
@@ -47,60 +36,142 @@ export function TagManagement({
     onTagSelect,
     onTagsChange,
     showInline = false,
-    isLoading = false,
+    isLoading: externalLoading,
+    isUpdating,
 }: TagManagementProps) {
     const { data: tags, isLoading: isTagsLoading } =
         useTags();
     const createTag = useCreateTag();
+    const updateTag = useUpdateTag();
     const deleteTag = useDeleteTag();
 
-    const [isCreateDialogOpen, setIsCreateDialogOpen] =
-        useState(false);
-    const [newTagName, setNewTagName] = useState("");
-    const [newTagColor, setNewTagColor] =
-        useState("#6366F1");
-    const [newTagType, setNewTagType] =
-        useState<TagType>("custom");
-    const [isCreating, setIsCreating] = useState(false);
+    // States for tag management
+    const [filter, setFilter] = useState<
+        "all" | "genre" | "content" | "custom"
+    >("all");
+    const [searchQuery, setSearchQuery] = useState("");
+    const [filteredTags, setFilteredTags] = useState<Tag[]>(
+        []
+    );
 
-    // Group tags by type
-    const genreTags =
-        tags?.filter((tag) => tag.type === "genre") || [];
-    const contentTags =
-        tags?.filter((tag) => tag.type === "content") || [];
-    const customTags =
-        tags?.filter((tag) => tag.type === "custom") || [];
+    // States for tag creation/editing
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [currentTag, setCurrentTag] = useState<{
+        id?: string;
+        name: string;
+        color: string;
+        type: TagType;
+    }>({
+        name: "",
+        color:
+            AVAILABLE_COLORS.find((c) => c.name === "blue")
+                ?.hex || "#3B82F6",
+        type: "custom",
+    });
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    // Handle create tag
+    // Filter tags based on search query and type filter
+    const filterTags = useCallback(
+        (
+            allTags: Tag[] = [],
+            tagFilter:
+                | "all"
+                | "genre"
+                | "content"
+                | "custom",
+            query: string
+        ) => {
+            if (!allTags) return [];
+
+            let filtered = [...allTags];
+
+            // Filter by type
+            if (tagFilter !== "all") {
+                filtered = filtered.filter(
+                    (tag) => tag.type === tagFilter
+                );
+            }
+
+            // Filter by search query
+            if (query.trim() !== "") {
+                const lowercaseQuery = query.toLowerCase();
+                filtered = filtered.filter((tag) =>
+                    tag.name
+                        .toLowerCase()
+                        .includes(lowercaseQuery)
+                );
+            }
+
+            return filtered;
+        },
+        []
+    );
+
+    // Update filtered tags when tags, filter, or search query changes
+    useEffect(() => {
+        if (tags) {
+            const filtered = filterTags(
+                tags,
+                filter,
+                searchQuery
+            );
+            setFilteredTags(filtered);
+        }
+    }, [tags, filter, searchQuery, filterTags]);
+
+    // Group tags by type for better organization
+    const groupedTags = {
+        genre: filteredTags.filter(
+            (tag) => tag.type === "genre"
+        ),
+        content: filteredTags.filter(
+            (tag) => tag.type === "content"
+        ),
+        custom: filteredTags.filter(
+            (tag) => tag.type === "custom"
+        ),
+    };
+
+    // Handle tag creation
     const handleCreateTag = async () => {
-        if (!newTagName.trim()) return;
+        if (!currentTag.name.trim()) return;
 
-        setIsCreating(true);
+        setIsProcessing(true);
         try {
-            await createTag.mutateAsync({
-                name: newTagName.trim(),
-                color: newTagColor,
-                type: newTagType,
-            });
+            if (isEditing && currentTag.id) {
+                await updateTag.mutateAsync({
+                    id: currentTag.id,
+                    data: {
+                        name: currentTag.name.trim(),
+                        color: currentTag.color,
+                        type: currentTag.type,
+                    },
+                });
+            } else {
+                await createTag.mutateAsync({
+                    name: currentTag.name.trim(),
+                    color: currentTag.color,
+                    type: currentTag.type,
+                });
+            }
 
             // Reset form
-            setNewTagName("");
-            setNewTagColor("#6366F1");
-            setNewTagType("custom");
-            setIsCreateDialogOpen(false);
+            resetTagForm();
+            setIsDialogOpen(false);
 
             // Notify parent component
             if (onTagsChange) {
                 onTagsChange();
             }
         } catch (error) {
-            console.error("Error creating tag:", error);
+            console.error("Error saving tag:", error);
         } finally {
-            setIsCreating(false);
+            setIsProcessing(false);
         }
     };
 
-    // Handle delete tag
+    // Handle tag deletion
     const handleDeleteTag = async (tagId: string) => {
         if (
             window.confirm(
@@ -120,297 +191,385 @@ export function TagManagement({
         }
     };
 
-    // Render a single tag
-    const renderTag = (
-        tag: Tag,
-        isSelected: boolean = false
-    ) => {
-        // Use the tag's color or a default
-        const tagColor = tag.color || "#6366F1";
-
-        return (
-            <div
-                key={tag.id}
-                className={cn(
-                    "group flex items-center justify-between px-3 py-1.5 rounded-full text-sm transition-all",
-                    isSelected
-                        ? "ring-2 ring-white"
-                        : "hover:opacity-90",
-                    "text-white"
-                )}
-                style={{
-                    backgroundColor: tagColor,
-                    ...(isSelected && {
-                        boxShadow: `0 0 0 1px white`,
-                    }),
-                }}
-            >
-                <div className="w-2 h-2 rounded-full mr-2 bg-white"></div>
-                <span className="mr-2">{tag.name}</span>
-
-                {/* Delete button (only shown for custom tags) */}
-                {tag.type === "custom" && !showInline && (
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteTag(tag.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 text-white hover:text-red-200 transition-opacity"
-                    >
-                        <X className="w-3.5 h-3.5" />
-                    </button>
-                )}
-
-                {/* Selected checkmark */}
-                {isSelected && showInline && (
-                    <Check className="w-3.5 h-3.5 text-white" />
-                )}
-            </div>
-        );
+    // Reset tag form
+    const resetTagForm = () => {
+        setCurrentTag({
+            name: "",
+            color:
+                AVAILABLE_COLORS.find(
+                    (c) => c.name === "blue"
+                )?.hex || "#3B82F6",
+            type: "custom",
+        });
+        setIsEditing(false);
     };
 
-    if (isLoading || isTagsLoading) {
-        return (
-            <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
-                <span className="ml-2 text-gray-600 dark:text-gray-300">
-                    Loading tags...
-                </span>
-            </div>
-        );
-    }
+    // Open edit dialog for a tag
+    const openEditDialog = (tag: Tag) => {
+        setCurrentTag({
+            id: tag.id,
+            name: tag.name,
+            color:
+                tag.color ||
+                AVAILABLE_COLORS.find(
+                    (c) => c.name === "blue"
+                )?.hex ||
+                "#3B82F6",
+            type: tag.type,
+        });
+        setIsEditing(true);
+        setIsDialogOpen(true);
+    };
 
-    // For inline mode (used in content detail)
+    // Handle tag selection with proper toggling
+    const handleTagSelect = (tagId: string) => {
+        if (onTagSelect) {
+            onTagSelect(tagId);
+        }
+    };
+
+    // Determine if we should show loading state
+    const isLoadingState =
+        externalLoading !== undefined
+            ? externalLoading
+            : isTagsLoading;
+
+    // For inline display (used in content detail page)
     if (showInline) {
         return (
             <div className="space-y-4">
-                {/* All tags in a grid */}
-                <div className="flex flex-wrap gap-2">
-                    {tags?.map((tag) => {
-                        const isSelected =
-                            selectedTagIds.includes(tag.id);
-                        return (
-                            <div
-                                key={tag.id}
-                                className="cursor-pointer"
-                                onClick={() =>
-                                    onTagSelect &&
-                                    onTagSelect(tag.id)
-                                }
+                {isLoadingState ? (
+                    <div className="flex flex-wrap gap-2">
+                        {[...Array(8)].map((_, i) => (
+                            <Skeleton
+                                key={`tag-skeleton-${i}`}
+                                className="h-7 w-24 rounded-full"
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <>
+                        <div className="flex flex-wrap gap-2">
+                            {filteredTags.length > 0 ? (
+                                filteredTags.map((tag) => (
+                                    <TagItem
+                                        key={tag.id}
+                                        tag={tag}
+                                        isSelected={selectedTagIds.includes(
+                                            tag.id
+                                        )}
+                                        onClick={() =>
+                                            handleTagSelect(
+                                                tag.id
+                                            )
+                                        }
+                                        isPending={
+                                            isUpdating
+                                        }
+                                    />
+                                ))
+                            ) : (
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    No tags available
+                                </p>
+                            )}
+                            <button
+                                onClick={() => {
+                                    resetTagForm();
+                                    setIsDialogOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:bg-orange-800/40 border border-orange-200 dark:border-orange-700 transition-all duration-200"
                             >
-                                {renderTag(tag, isSelected)}
-                            </div>
-                        );
-                    })}
+                                <Plus className="w-3 h-3" />
+                                Add Tag
+                            </button>
+                        </div>
 
-                    {tags?.length === 0 && (
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">
-                            No tags available. Create some
-                            tags to categorize your content.
-                        </p>
-                    )}
-                </div>
+                        <TagDialog
+                            isOpen={isDialogOpen}
+                            setIsOpen={setIsDialogOpen}
+                            tag={currentTag}
+                            setTag={setCurrentTag}
+                            onSave={handleCreateTag}
+                            isProcessing={isProcessing}
+                            isEditing={isEditing}
+                        />
+                    </>
+                )}
             </div>
         );
     }
 
-    // For management mode (used in settings)
+    // Full management view
     return (
-        <div className="space-y-6">
-            {/* Create Tag Dialog */}
-            <Dialog
-                open={isCreateDialogOpen}
-                onOpenChange={setIsCreateDialogOpen}
-            >
-                <DialogTrigger asChild>
-                    <Button className="flex items-center gap-2">
-                        <Plus className="w-4 h-4" />
-                        <span>Create New Tag</span>
-                    </Button>
-                </DialogTrigger>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>
-                            Create New Tag
-                        </DialogTitle>
-                        <DialogDescription>
-                            Create a new tag to organize
-                            your content. Tags can be
-                            assigned to any content in your
-                            library.
-                        </DialogDescription>
-                    </DialogHeader>
+        <div
+            className={cn(
+                "bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden ring-1 ring-gray-200 dark:ring-gray-700",
+                !showInline && "pb-20"
+            )}
+        >
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <TagIcon className="w-5 h-5 text-orange-500" />
+                    Tag Management
+                </h3>
 
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <label
-                                htmlFor="tag-name"
-                                className="text-sm font-medium"
-                            >
-                                Tag Name
-                            </label>
-                            <Input
-                                id="tag-name"
-                                placeholder="e.g., Fantasy, Favorites, To Read"
-                                value={newTagName}
-                                onChange={(e) =>
-                                    setNewTagName(
-                                        e.target.value
-                                    )
-                                }
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label
-                                htmlFor="tag-color"
-                                className="text-sm font-medium"
-                            >
-                                Tag Color
-                            </label>
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="color"
-                                    id="tag-color"
-                                    value={newTagColor}
-                                    onChange={(e) =>
-                                        setNewTagColor(
-                                            e.target.value
-                                        )
-                                    }
-                                    className="w-10 h-10 rounded cursor-pointer"
-                                />
-                                <Input
-                                    value={newTagColor}
-                                    onChange={(e) =>
-                                        setNewTagColor(
-                                            e.target.value
-                                        )
-                                    }
-                                    className="font-mono"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <label
-                                htmlFor="tag-type"
-                                className="text-sm font-medium"
-                            >
-                                Tag Type
-                            </label>
-                            <Select
-                                value={newTagType}
-                                onValueChange={(value) =>
-                                    setNewTagType(
-                                        value as TagType
-                                    )
-                                }
-                            >
-                                <SelectTrigger id="tag-type">
-                                    <SelectValue placeholder="Select tag type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="genre">
-                                        Genre
-                                    </SelectItem>
-                                    <SelectItem value="content">
-                                        Content Warning
-                                    </SelectItem>
-                                    <SelectItem value="custom">
-                                        Custom
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() =>
-                                setIsCreateDialogOpen(false)
+                <div className="flex items-center gap-2">
+                    {/* Search input */}
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="Search tags..."
+                            value={searchQuery}
+                            onChange={(e) =>
+                                setSearchQuery(
+                                    e.target.value
+                                )
                             }
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleCreateTag}
-                            disabled={isCreating}
-                        >
-                            {isCreating ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Creating...
-                                </>
-                            ) : (
-                                "Create Tag"
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Tags by category */}
-            <div className="space-y-6">
-                {/* Genre Tags */}
-                <div className="space-y-2">
-                    <h3 className="text-lg font-medium flex items-center gap-2">
-                        <TagIcon className="w-4 h-4 text-blue-500" />
-                        <span>Genre Tags</span>
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                        {genreTags.length > 0 ? (
-                            genreTags.map((tag) =>
-                                renderTag(tag)
-                            )
-                        ) : (
-                            <p className="text-sm text-gray-500">
-                                No genre tags available.
-                            </p>
-                        )}
+                            className="w-full py-1.5 pl-8 pr-4 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 dark:bg-gray-700 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-colors"
+                        />
+                        <div className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400">
+                            <Search className="w-4 h-4" />
+                        </div>
                     </div>
-                </div>
 
-                {/* Content Tags */}
-                <div className="space-y-2">
-                    <h3 className="text-lg font-medium flex items-center gap-2">
-                        <TagIcon className="w-4 h-4 text-amber-500" />
-                        <span>Content Warning Tags</span>
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                        {contentTags.length > 0 ? (
-                            contentTags.map((tag) =>
-                                renderTag(tag)
+                    {/* Filter dropdown */}
+                    <select
+                        value={filter}
+                        onChange={(e) =>
+                            setFilter(
+                                e.target.value as
+                                    | "all"
+                                    | "genre"
+                                    | "content"
+                                    | "custom"
                             )
-                        ) : (
-                            <p className="text-sm text-gray-500">
-                                No content warning tags
-                                available.
-                            </p>
-                        )}
-                    </div>
-                </div>
+                        }
+                        className="py-1.5 px-3 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 dark:bg-gray-700 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-colors"
+                    >
+                        <option value="all">
+                            All Types
+                        </option>
+                        <option value="genre">
+                            Genres
+                        </option>
+                        <option value="content">
+                            Content Tags
+                        </option>
+                        <option value="custom">
+                            Custom Tags
+                        </option>
+                    </select>
 
-                {/* Custom Tags */}
-                <div className="space-y-2">
-                    <h3 className="text-lg font-medium flex items-center gap-2">
-                        <TagIcon className="w-4 h-4 text-purple-500" />
-                        <span>Custom Tags</span>
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                        {customTags.length > 0 ? (
-                            customTags.map((tag) =>
-                                renderTag(tag)
-                            )
-                        ) : (
-                            <p className="text-sm text-gray-500">
-                                No custom tags available.
-                            </p>
-                        )}
-                    </div>
+                    {/* Add tag button */}
+                    <button
+                        onClick={() => {
+                            resetTagForm();
+                            setIsDialogOpen(true);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:bg-orange-800/40 border border-orange-200 dark:border-orange-700 transition-all duration-200"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add Tag
+                    </button>
                 </div>
             </div>
+
+            <div className="p-5 space-y-6">
+                {isLoadingState ? (
+                    <div className="space-y-4">
+                        {/* Section titles */}
+                        <div>
+                            <Skeleton className="h-5 w-24 mb-3" />
+                            <div className="flex flex-wrap gap-2">
+                                <Skeleton className="h-7 w-16 rounded-full" />
+                                <Skeleton className="h-7 w-20 rounded-full" />
+                                <Skeleton className="h-7 w-24 rounded-full" />
+                                <Skeleton className="h-7 w-18 rounded-full" />
+                            </div>
+                        </div>
+                        <div>
+                            <Skeleton className="h-5 w-28 mb-3" />
+                            <div className="flex flex-wrap gap-2">
+                                <Skeleton className="h-7 w-32 rounded-full" />
+                                <Skeleton className="h-7 w-24 rounded-full" />
+                                <Skeleton className="h-7 w-20 rounded-full" />
+                            </div>
+                        </div>
+                        <div>
+                            <Skeleton className="h-5 w-24 mb-3" />
+                            <div className="flex flex-wrap gap-2">
+                                <Skeleton className="h-7 w-22 rounded-full" />
+                                <Skeleton className="h-7 w-28 rounded-full" />
+                                <Skeleton className="h-7 w-16 rounded-full" />
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        {/* Genre tags */}
+                        {(filter === "all" ||
+                            filter === "genre") &&
+                            groupedTags.genre.length >
+                                0 && (
+                                <div>
+                                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+                                        <Bookmark className="w-4 h-4 mr-1.5 text-orange-500" />
+                                        Genres
+                                    </h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {groupedTags.genre.map(
+                                            (tag) => (
+                                                <TagItem
+                                                    key={
+                                                        tag.id
+                                                    }
+                                                    tag={
+                                                        tag
+                                                    }
+                                                    isSelected={selectedTagIds.includes(
+                                                        tag.id
+                                                    )}
+                                                    onClick={
+                                                        onTagSelect
+                                                            ? () =>
+                                                                  handleTagSelect(
+                                                                      tag.id
+                                                                  )
+                                                            : undefined
+                                                    }
+                                                    onEdit={
+                                                        openEditDialog
+                                                    }
+                                                    onDelete={
+                                                        handleDeleteTag
+                                                    }
+                                                    isPending={
+                                                        isUpdating
+                                                    }
+                                                />
+                                            )
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                        {/* Content tags */}
+                        {(filter === "all" ||
+                            filter === "content") &&
+                            groupedTags.content.length >
+                                0 && (
+                                <div>
+                                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+                                        <Hash className="w-4 h-4 mr-1.5 text-blue-500" />
+                                        Content Tags
+                                    </h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {groupedTags.content.map(
+                                            (tag) => (
+                                                <TagItem
+                                                    key={
+                                                        tag.id
+                                                    }
+                                                    tag={
+                                                        tag
+                                                    }
+                                                    isSelected={selectedTagIds.includes(
+                                                        tag.id
+                                                    )}
+                                                    onClick={
+                                                        onTagSelect
+                                                            ? () =>
+                                                                  handleTagSelect(
+                                                                      tag.id
+                                                                  )
+                                                            : undefined
+                                                    }
+                                                    onEdit={
+                                                        openEditDialog
+                                                    }
+                                                    onDelete={
+                                                        handleDeleteTag
+                                                    }
+                                                    isPending={
+                                                        isUpdating
+                                                    }
+                                                />
+                                            )
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                        {/* Custom tags */}
+                        {(filter === "all" ||
+                            filter === "custom") &&
+                            groupedTags.custom.length >
+                                0 && (
+                                <div>
+                                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+                                        <Palette className="w-4 h-4 mr-1.5 text-purple-500" />
+                                        Custom Tags
+                                    </h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {groupedTags.custom.map(
+                                            (tag) => (
+                                                <TagItem
+                                                    key={
+                                                        tag.id
+                                                    }
+                                                    tag={
+                                                        tag
+                                                    }
+                                                    isSelected={selectedTagIds.includes(
+                                                        tag.id
+                                                    )}
+                                                    onClick={
+                                                        onTagSelect
+                                                            ? () =>
+                                                                  handleTagSelect(
+                                                                      tag.id
+                                                                  )
+                                                            : undefined
+                                                    }
+                                                    onEdit={
+                                                        openEditDialog
+                                                    }
+                                                    onDelete={
+                                                        handleDeleteTag
+                                                    }
+                                                    isPending={
+                                                        isUpdating
+                                                    }
+                                                />
+                                            )
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                        {filteredTags.length === 0 && (
+                            <div className="text-center p-6 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                                <p className="text-gray-500 dark:text-gray-400">
+                                    {searchQuery
+                                        ? "No tags match your search"
+                                        : "No tags found"}
+                                </p>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            <TagDialog
+                isOpen={isDialogOpen}
+                setIsOpen={setIsDialogOpen}
+                tag={currentTag}
+                setTag={setCurrentTag}
+                onSave={handleCreateTag}
+                isProcessing={isProcessing}
+                isEditing={isEditing}
+            />
         </div>
     );
 }

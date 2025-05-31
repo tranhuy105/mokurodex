@@ -1,0 +1,291 @@
+// Available colors for tag styling
+export const AVAILABLE_COLORS = [
+    {
+        name: "slate",
+        hex: "#64748B",
+        light: {
+            bg: "bg-slate-100",
+            text: "text-slate-700",
+            border: "border-slate-200",
+            hover: "hover:bg-slate-200",
+        },
+        dark: {
+            bg: "bg-slate-800/30",
+            text: "text-slate-300",
+            border: "border-slate-700",
+            hover: "hover:bg-slate-700/40",
+        },
+    },
+    {
+        name: "red",
+        hex: "#EF4444",
+        light: {
+            bg: "bg-red-100",
+            text: "text-red-700",
+            border: "border-red-200",
+            hover: "hover:bg-red-200",
+        },
+        dark: {
+            bg: "bg-red-900/30",
+            text: "text-red-300",
+            border: "border-red-700",
+            hover: "hover:bg-red-800/40",
+        },
+    },
+    {
+        name: "orange",
+        hex: "#F97316",
+        light: {
+            bg: "bg-orange-100",
+            text: "text-orange-700",
+            border: "border-orange-200",
+            hover: "hover:bg-orange-200",
+        },
+        dark: {
+            bg: "bg-orange-900/30",
+            text: "text-orange-300",
+            border: "border-orange-700",
+            hover: "hover:bg-orange-800/40",
+        },
+    },
+    {
+        name: "amber",
+        hex: "#F59E0B",
+        light: {
+            bg: "bg-amber-100",
+            text: "text-amber-700",
+            border: "border-amber-200",
+            hover: "hover:bg-amber-200",
+        },
+        dark: {
+            bg: "bg-amber-900/30",
+            text: "text-amber-300",
+            border: "border-amber-700",
+            hover: "hover:bg-amber-800/40",
+        },
+    },
+    {
+        name: "yellow",
+        hex: "#EAB308",
+        light: {
+            bg: "bg-yellow-100",
+            text: "text-yellow-700",
+            border: "border-yellow-200",
+            hover: "hover:bg-yellow-200",
+        },
+        dark: {
+            bg: "bg-yellow-900/30",
+            text: "text-yellow-300",
+            border: "border-yellow-700",
+            hover: "hover:bg-yellow-800/40",
+        },
+    },
+    {
+        name: "lime",
+        hex: "#84CC16",
+        light: {
+            bg: "bg-lime-100",
+            text: "text-lime-700",
+            border: "border-lime-200",
+            hover: "hover:bg-lime-200",
+        },
+        dark: {
+            bg: "bg-lime-900/30",
+            text: "text-lime-300",
+            border: "border-lime-700",
+            hover: "hover:bg-lime-800/40",
+        },
+    },
+    {
+        name: "green",
+        hex: "#22C55E",
+        light: {
+            bg: "bg-green-100",
+            text: "text-green-700",
+            border: "border-green-200",
+            hover: "hover:bg-green-200",
+        },
+        dark: {
+            bg: "bg-green-900/30",
+            text: "text-green-300",
+            border: "border-green-700",
+            hover: "hover:bg-green-800/40",
+        },
+    },
+    {
+        name: "emerald",
+        hex: "#10B981",
+        light: {
+            bg: "bg-emerald-100",
+            text: "text-emerald-700",
+            border: "border-emerald-200",
+            hover: "hover:bg-emerald-200",
+        },
+        dark: {
+            bg: "bg-emerald-900/30",
+            text: "text-emerald-300",
+            border: "border-emerald-700",
+            hover: "hover:bg-emerald-800/40",
+        },
+    },
+    {
+        name: "teal",
+        hex: "#14B8A6",
+        light: {
+            bg: "bg-teal-100",
+            text: "text-teal-700",
+            border: "border-teal-200",
+            hover: "hover:bg-teal-200",
+        },
+        dark: {
+            bg: "bg-teal-900/30",
+            text: "text-teal-300",
+            border: "border-teal-700",
+            hover: "hover:bg-teal-800/40",
+        },
+    },
+    {
+        name: "cyan",
+        hex: "#06B6D4",
+        light: {
+            bg: "bg-cyan-100",
+            text: "text-cyan-700",
+            border: "border-cyan-200",
+            hover: "hover:bg-cyan-200",
+        },
+        dark: {
+            bg: "bg-cyan-900/30",
+            text: "text-cyan-300",
+            border: "border-cyan-700",
+            hover: "hover:bg-cyan-800/40",
+        },
+    },
+    {
+        name: "sky",
+        hex: "#0EA5E9",
+        light: {
+            bg: "bg-sky-100",
+            text: "text-sky-700",
+            border: "border-sky-200",
+            hover: "hover:bg-sky-200",
+        },
+        dark: {
+            bg: "bg-sky-900/30",
+            text: "text-sky-300",
+            border: "border-sky-700",
+            hover: "hover:bg-sky-800/40",
+        },
+    },
+    {
+        name: "blue",
+        hex: "#3B82F6",
+        light: {
+            bg: "bg-blue-100",
+            text: "text-blue-700",
+            border: "border-blue-200",
+            hover: "hover:bg-blue-200",
+        },
+        dark: {
+            bg: "bg-blue-900/30",
+            text: "text-blue-300",
+            border: "border-blue-700",
+            hover: "hover:bg-blue-800/40",
+        },
+    },
+    {
+        name: "indigo",
+        hex: "#6366F1",
+        light: {
+            bg: "bg-indigo-100",
+            text: "text-indigo-700",
+            border: "border-indigo-200",
+            hover: "hover:bg-indigo-200",
+        },
+        dark: {
+            bg: "bg-indigo-900/30",
+            text: "text-indigo-300",
+            border: "border-indigo-700",
+            hover: "hover:bg-indigo-800/40",
+        },
+    },
+    {
+        name: "violet",
+        hex: "#8B5CF6",
+        light: {
+            bg: "bg-violet-100",
+            text: "text-violet-700",
+            border: "border-violet-200",
+            hover: "hover:bg-violet-200",
+        },
+        dark: {
+            bg: "bg-violet-900/30",
+            text: "text-violet-300",
+            border: "border-violet-700",
+            hover: "hover:bg-violet-800/40",
+        },
+    },
+    {
+        name: "purple",
+        hex: "#A855F7",
+        light: {
+            bg: "bg-purple-100",
+            text: "text-purple-700",
+            border: "border-purple-200",
+            hover: "hover:bg-purple-200",
+        },
+        dark: {
+            bg: "bg-purple-900/30",
+            text: "text-purple-300",
+            border: "border-purple-700",
+            hover: "hover:bg-purple-800/40",
+        },
+    },
+    {
+        name: "fuchsia",
+        hex: "#D946EF",
+        light: {
+            bg: "bg-fuchsia-100",
+            text: "text-fuchsia-700",
+            border: "border-fuchsia-200",
+            hover: "hover:bg-fuchsia-200",
+        },
+        dark: {
+            bg: "bg-fuchsia-900/30",
+            text: "text-fuchsia-300",
+            border: "border-fuchsia-700",
+            hover: "hover:bg-fuchsia-800/40",
+        },
+    },
+    {
+        name: "pink",
+        hex: "#EC4899",
+        light: {
+            bg: "bg-pink-100",
+            text: "text-pink-700",
+            border: "border-pink-200",
+            hover: "hover:bg-pink-200",
+        },
+        dark: {
+            bg: "bg-pink-900/30",
+            text: "text-pink-300",
+            border: "border-pink-700",
+            hover: "hover:bg-pink-800/40",
+        },
+    },
+    {
+        name: "rose",
+        hex: "#F43F5E",
+        light: {
+            bg: "bg-rose-100",
+            text: "text-rose-700",
+            border: "border-rose-200",
+            hover: "hover:bg-rose-200",
+        },
+        dark: {
+            bg: "bg-rose-900/30",
+            text: "text-rose-300",
+            border: "border-rose-700",
+            hover: "hover:bg-rose-800/40",
+        },
+    },
+];

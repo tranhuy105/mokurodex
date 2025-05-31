@@ -3,6 +3,7 @@
 import {
     Book,
     FolderOpen,
+    Home,
     Menu,
     Moon,
     Search,
@@ -61,12 +62,13 @@ export default function Navbar() {
                         <div className="hidden md:flex items-center space-x-1">
                             <Link
                                 href="/"
-                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center ${
                                     isActive("/")
                                         ? "text-orange-600 dark:text-orange-400"
                                         : "text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                                 }`}
                             >
+                                <Home className="h-4 w-4 mr-1" />
                                 Home
                             </Link>
                             <Link
@@ -90,6 +92,17 @@ export default function Navbar() {
                             >
                                 <FolderOpen className="h-4 w-4 mr-1" />
                                 Collections
+                            </Link>
+                            <Link
+                                href="/tags"
+                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center ${
+                                    isActive("/tags")
+                                        ? "text-orange-600 dark:text-orange-400"
+                                        : "text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                }`}
+                            >
+                                <Tag className="h-4 w-4 mr-1" />
+                                Tags
                             </Link>
                             <Link
                                 href="/settings"

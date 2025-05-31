@@ -20,8 +20,14 @@ import {
     User,
 } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
-import { TagManagement } from "../../tags/TagManagement";
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
+import { toast } from "sonner";
+import { TagManagement } from "../../tags";
 import { ContentManagementPanel } from "./ContentManagementPanel";
 import { ContentManagementPanelSkeleton } from "./ContentManagementPanelSkeleton";
 import { VolumeGrid } from "./VolumeGrid";
@@ -66,6 +72,49 @@ export function ContentDetail({
 
     // Track if the component is mounted
     const isMounted = useRef(true);
+
+    const handleTagSelect = useCallback(
+        async (tagId: string) => {
+            // Prevent multiple operations - only check React Query's pending state
+            if (updateMetadata.isPending) return;
+
+            try {
+                const currentTagIds =
+                    contentWithUserData?.contentTags?.map(
+                        (ct) => ct.tagId
+                    ) || [];
+                const isCurrentlySelected =
+                    currentTagIds.includes(tagId);
+
+                // Toggle the tag - simpler logic
+                const newTagIds = isCurrentlySelected
+                    ? currentTagIds.filter(
+                          (id) => id !== tagId
+                      )
+                    : [...currentTagIds, tagId];
+
+                // React Query will handle the pending state automatically
+                await updateMetadata.mutateAsync({
+                    contentId: content.id,
+                    data: { tagIds: newTagIds },
+                });
+
+                // No need for manual refresh - React Query should auto-invalidate
+                // If auto-invalidation isn't working, you might need to configure it in your mutation
+            } catch (error) {
+                console.error(
+                    "Error updating tags:",
+                    error
+                );
+                toast.error("Failed to update tag");
+            }
+        },
+        [
+            contentWithUserData?.contentTags,
+            updateMetadata,
+            content.id,
+        ]
+    );
 
     useEffect(() => {
         // Set isMounted to true when component mounts
@@ -597,50 +646,20 @@ export function ContentDetail({
                                 <TagManagement
                                     showInline={true}
                                     selectedTagIds={
-                                        userData?.tagIds ||
-                                        []
+                                        contentWithUserData?.contentTags?.map(
+                                            (ct) => ct.tagId
+                                        ) || []
                                     }
-                                    onTagSelect={async (
-                                        tagId: string
-                                    ) => {
-                                        // Toggle tag selection
-                                        const currentTags =
-                                            userData?.tagIds ||
-                                            [];
-                                        const newTags =
-                                            currentTags.includes(
-                                                tagId
-                                            )
-                                                ? currentTags.filter(
-                                                      (
-                                                          id
-                                                      ) =>
-                                                          id !==
-                                                          tagId
-                                                  )
-                                                : [
-                                                      ...currentTags,
-                                                      tagId,
-                                                  ];
-
-                                        // Update user metadata with new tags
-                                        await updateMetadata.mutateAsync(
-                                            {
-                                                contentId:
-                                                    content.id,
-                                                data: {
-                                                    tagIds: newTags,
-                                                },
-                                            }
-                                        );
-
-                                        // Refresh data
-                                        handleDataUpdate();
-                                    }}
+                                    onTagSelect={
+                                        handleTagSelect
+                                    }
                                     onTagsChange={
                                         handleDataUpdate
                                     }
                                     isLoading={isLoading}
+                                    isUpdating={
+                                        updateMetadata.isPending
+                                    }
                                 />
                             </div>
                         </div>

@@ -475,7 +475,7 @@ export async function updateUserContentMetadata(
         }
 
         // Update tags if provided
-        if (tagIds) {
+        if (tagIds !== undefined) {
             // Delete existing tags
             await db.contentTag.deleteMany({
                 where: { contentId: parsedContentId },
@@ -498,7 +498,7 @@ export async function updateUserContentMetadata(
         }
 
         // Update collections if provided
-        if (collectionIds) {
+        if (collectionIds !== undefined) {
             // Delete existing collection relationships
             await db.collectionContent.deleteMany({
                 where: { contentId: parsedContentId },

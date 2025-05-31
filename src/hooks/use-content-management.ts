@@ -527,19 +527,32 @@ export function useUpdateUserContentMetadata() {
         onSuccess: (data, { contentId }) => {
             if (data) {
                 toast.success("Content metadata updated");
+
+                // Invalidate content metadata
                 queryClient.invalidateQueries({
                     queryKey:
                         managementKeys.contentMetadata(
                             contentId
                         ),
                 });
-                // Also invalidate content queries that might include this metadata
+
+                // Invalidate content queries that include this metadata
                 queryClient.invalidateQueries({
                     queryKey: [
                         "content",
-                        "detail",
+                        "withUserData",
                         contentId,
                     ],
+                });
+
+                // Also invalidate tag-related queries if tagIds were updated
+                queryClient.invalidateQueries({
+                    queryKey: managementKeys.tags(),
+                });
+
+                // Invalidate content by tag queries
+                queryClient.invalidateQueries({
+                    queryKey: ["content", "byTag"],
                 });
             } else {
                 toast.error(
