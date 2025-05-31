@@ -23,6 +23,9 @@ import { z } from "zod";
  * Import content from a directory
  * This is the main entry point for importing content
  * It will detect the content type based on the files in the directory
+ * 
+ * This function checks for duplicates by directory path and returns existing content when found,
+ * ensuring consistent behavior across both individual imports and directory scanning.
  */
 export async function importContent(
     input: z.infer<typeof ContentImportSchema>
@@ -46,6 +49,22 @@ export async function importContent(
             );
         }
 
+        // Check if content already exists with this directory path
+        const existingContent = await db.content.findFirst({
+            where: { directoryPath: directoryPath },
+            include: {
+                contentVolumes: true,
+            },
+        });
+
+        if (existingContent) {
+            // Content already exists, return it directly
+            console.log(
+                `Content already exists for ${directoryPath}, returning existing content`
+            );
+            return existingContent;
+        }
+
         // Look for files in the directory
         const files = await readDirectory(directoryPath);
 
@@ -65,18 +84,23 @@ export async function importContent(
 
         if (hasMokuroFiles) {
             // Import as manga
-            return importMangaFromDirectory(
+            const result = await importMangaFromDirectory(
                 directoryPath,
                 providedContentId,
                 isCustomPath
             );
+            revalidatePath("/content");
+            return result;
         } else if (hasEpubFiles) {
             // Import as light novel
-            return importLightNovelFromDirectory(
-                directoryPath,
-                providedContentId,
-                isCustomPath
-            );
+            const result =
+                await importLightNovelFromDirectory(
+                    directoryPath,
+                    providedContentId,
+                    isCustomPath
+                );
+            revalidatePath("/content");
+            return result;
         } else {
             throw new Error(
                 `No supported content files found in ${directoryPath}`
@@ -140,6 +164,8 @@ async function importMangaFromDirectory(
         );
 
         // Check if content already exists with this directory path
+        // NOTE: This check is now redundant as importContent already does this check
+        // We keep it here for the existingVolumes data we need later
         const existingContent = await db.content.findFirst({
             where: { directoryPath: directoryPath },
             include: {
@@ -218,7 +244,7 @@ async function importMangaFromDirectory(
                 mokuroFile
             );
 
-            // Skip this volume if it already exists
+            // Skip this volume if it already exists by filepath
             if (existingVolumeFilePaths.has(mokuroPath)) {
                 console.log(
                     `Skipping existing volume: ${mokuroPath}`
@@ -230,6 +256,26 @@ async function importMangaFromDirectory(
                 mokuroPath
             );
             const mokuroData = JSON.parse(mokuroContent);
+
+            // Check for volume ID
+            const volumeUuid =
+                mokuroData.volume_uuid || nanoid();
+
+            // Generate a new unique ID for this volume that's different from volumeUuid
+            // This ensures we don't have ID conflicts
+            const volumeId = nanoid();
+
+            // Skip if the volume UUID already exists (additional check)
+            if (
+                existingVolumes.some(
+                    (vol) => vol.volumeUuid === volumeUuid
+                )
+            ) {
+                console.log(
+                    `Skipping volume with duplicate UUID: ${volumeUuid}`
+                );
+                continue;
+            }
 
             // Get file stats
             const volumeStats = await getFileStats(
@@ -274,7 +320,7 @@ async function importMangaFromDirectory(
             // Create the volume
             const volume = await db.volume.create({
                 data: {
-                    id: mokuroData.volume_uuid || nanoid(),
+                    id: volumeId,
                     contentId: contentId,
                     volumeNumber: volumeNumber,
                     volumeTitle:
@@ -286,8 +332,7 @@ async function importMangaFromDirectory(
                         mokuroData.pages?.length || 0,
                     addedDate: volumeAddedDate,
                     lastModified: volumeLastModified,
-                    volumeUuid:
-                        mokuroData.volume_uuid || nanoid(),
+                    volumeUuid: volumeUuid,
                     volumeType: "manga",
                     previewImages:
                         previewImages.length > 0
@@ -377,6 +422,8 @@ async function importLightNovelFromDirectory(
         );
 
         // Check if content already exists with this directory path
+        // NOTE: This check is now redundant as importContent already does this check
+        // We keep it here for the existingVolumes data we need later
         const existingContent = await db.content.findFirst({
             where: { directoryPath: directoryPath },
             include: {
@@ -714,16 +761,17 @@ export async function getEpubFileUrl(
 }
 
 /**
- * Scan a directory for content (manga or light novels)
+ * Scan a directory for content (manga or light novels) with detailed progress updates
+ * This version provides more granular progress tracking for the workflow visualization
  */
-export async function scanContentDirectory(
+export async function scanContentDirectoryWithProgress(
     input: z.infer<typeof ScanDirectorySchema>
 ) {
     try {
         const { baseDir, contentType } =
             ScanDirectorySchema.parse(input);
 
-        // Construct the path to the content directory
+        // Step 1: Initialize scan - construct the path to the content directory
         const subDir =
             contentType === "manga" ? "manga" : "ln";
         const targetPath = path.join(baseDir, subDir);
@@ -734,9 +782,10 @@ export async function scanContentDirectory(
             directoryExists,
         } = await import("@/lib/server/fs-adapter");
 
-        // Check if the directory exists
+        // Step 2: Verify directory exists
         if (!(await directoryExists(targetPath))) {
             return {
+                step: "verify_directory",
                 success: false,
                 error: `Directory not found: ${targetPath}. Please create it first.`,
                 importedCount: 0,
@@ -746,7 +795,7 @@ export async function scanContentDirectory(
             };
         }
 
-        // List subdirectories in the target path
+        // Step 3: List subdirectories in the target path
         const entries = await readDirectoryWithFileTypes(
             targetPath
         );
@@ -761,6 +810,7 @@ export async function scanContentDirectory(
 
         if (subDirectories.length === 0) {
             return {
+                step: "find_content_directories",
                 success: false,
                 error: `No subdirectories found in ${targetPath}`,
                 importedCount: 0,
@@ -770,13 +820,34 @@ export async function scanContentDirectory(
             };
         }
 
-        // Process each subdirectory
+        // Step 4: Process each subdirectory
         const successfulImports = [];
         const failedImports = [];
 
         for (const dir of subDirectories) {
             try {
-                // Import this specific content directory
+                // Step 5: Detect content type
+                const { readDirectory } = await import(
+                    "@/lib/server/fs-adapter"
+                );
+                const files = await readDirectory(dir.path);
+
+                const hasMokuroFiles = files.some((file) =>
+                    file.endsWith(".mokuro")
+                );
+                const hasEpubFiles = files.some((file) =>
+                    file.endsWith(".epub")
+                );
+
+                if (!hasMokuroFiles && !hasEpubFiles) {
+                    failedImports.push({
+                        name: dir.name,
+                        error: "No supported content files found",
+                    });
+                    continue;
+                }
+
+                // Step 6: Import content
                 const result = await importContent({
                     directoryPath: dir.path,
                     isCustomPath: false,
@@ -810,7 +881,9 @@ export async function scanContentDirectory(
             }
         }
 
+        // Step 7: Complete - return results
         return {
+            step: "complete",
             success: successfulImports.length > 0,
             importedCount: successfulImports.length,
             failedCount: failedImports.length,
@@ -823,6 +896,7 @@ export async function scanContentDirectory(
             error
         );
         return {
+            step: "error",
             success: false,
             error:
                 error instanceof Error

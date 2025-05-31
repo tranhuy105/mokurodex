@@ -151,7 +151,8 @@ export function useScanContentDirectory() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: contentActions.scanContentDirectory,
+        mutationFn:
+            contentActions.scanContentDirectoryWithProgress,
         onSuccess: (data) => {
             if (data.success) {
                 toast.success(
