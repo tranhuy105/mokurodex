@@ -49,22 +49,6 @@ export async function importContent(
             );
         }
 
-        // Check if content already exists with this directory path
-        const existingContent = await db.content.findFirst({
-            where: { directoryPath: directoryPath },
-            include: {
-                contentVolumes: true,
-            },
-        });
-
-        if (existingContent) {
-            // Content already exists, return it directly
-            console.log(
-                `Content already exists for ${directoryPath}, returning existing content`
-            );
-            return existingContent;
-        }
-
         // Look for files in the directory
         const files = await readDirectory(directoryPath);
 
@@ -115,9 +99,7 @@ export async function importContent(
     }
 }
 
-/**
- * Import manga from a directory with .mokuro files
- */
+// Fixed manga import function - properly handles new volumes
 async function importMangaFromDirectory(
     directoryPath: string,
     providedContentId: string | null = null,
@@ -126,7 +108,6 @@ async function importMangaFromDirectory(
     const now = new Date();
 
     try {
-        // Dynamically import server-only functions
         const {
             readDirectory,
             readFile,
@@ -146,26 +127,15 @@ async function importMangaFromDirectory(
             );
         }
 
+        // Sort mokuro files to ensure consistent ordering
+        mokuroFiles.sort();
+
         // Get stats for the directory
         const stats = await getFileStats(directoryPath);
         const addedDate = stats.birthtime || stats.mtime;
         const lastModified = stats.mtime;
 
-        // Read the first .mokuro file to get content info
-        const firstMokuroFile = await joinPath(
-            directoryPath,
-            mokuroFiles[0]
-        );
-        const firstMokuroContent = await readFile(
-            firstMokuroFile
-        );
-        const firstMokuroData = JSON.parse(
-            firstMokuroContent
-        );
-
         // Check if content already exists with this directory path
-        // NOTE: This check is now redundant as importContent already does this check
-        // We keep it here for the existingVolumes data we need later
         const existingContent = await db.content.findFirst({
             where: { directoryPath: directoryPath },
             include: {
@@ -173,36 +143,190 @@ async function importMangaFromDirectory(
             },
         });
 
-        // Generate a content ID - use existing ID if found, provided ID if given, or generate new one
+        // Generate a content ID
         const contentId =
             existingContent?.id ||
             providedContentId ||
             nanoid();
 
-        // Get the cover image from the first page of the first volume
+        // Build maps of existing volumes for comparison
+        const existingVolumesByPath = new Map();
+        const existingVolumesByNumber = new Map();
+
+        if (existingContent?.contentVolumes) {
+            existingContent.contentVolumes.forEach(
+                (vol) => {
+                    existingVolumesByPath.set(
+                        vol.filePath,
+                        vol
+                    );
+                    existingVolumesByNumber.set(
+                        vol.volumeNumber,
+                        vol
+                    );
+                }
+            );
+        }
+
+        // Check ALL mokuro files and determine what needs to be processed
+        const volumesToProcess = [];
+        const allVolumeNumbers = new Set();
+
+        for (const mokuroFile of mokuroFiles) {
+            const mokuroPath = await joinPath(
+                directoryPath,
+                mokuroFile
+            );
+
+            try {
+                const volumeStats = await getFileStats(
+                    mokuroPath
+                );
+                const existingVolumeByPath =
+                    existingVolumesByPath.get(mokuroPath);
+
+                // Read mokuro data to get volume number
+                const mokuroContent = await readFile(
+                    mokuroPath
+                );
+                const mokuroData =
+                    JSON.parse(mokuroContent);
+                const volumeNumber =
+                    extractVolumeNumber(
+                        mokuroData.volume
+                    ) ||
+                    mokuroFiles.indexOf(mokuroFile) + 1;
+
+                allVolumeNumbers.add(volumeNumber);
+                const existingVolumeByNumber =
+                    existingVolumesByNumber.get(
+                        volumeNumber
+                    );
+
+                // Determine if we need to process this volume
+                let shouldProcess = false;
+                let reason = "";
+
+                if (
+                    !existingVolumeByPath &&
+                    !existingVolumeByNumber
+                ) {
+                    // Completely new volume
+                    shouldProcess = true;
+                    reason = "new volume";
+                } else if (
+                    existingVolumeByPath &&
+                    volumeStats.mtime >
+                        existingVolumeByPath.lastModified
+                ) {
+                    // Existing volume file was modified
+                    shouldProcess = true;
+                    reason = "file updated";
+                } else if (
+                    !existingVolumeByPath &&
+                    existingVolumeByNumber
+                ) {
+                    // Volume number exists but path is different (file moved/renamed)
+                    shouldProcess = true;
+                    reason = "file path changed";
+                }
+
+                if (shouldProcess) {
+                    volumesToProcess.push({
+                        file: mokuroFile,
+                        path: mokuroPath,
+                        stats: volumeStats,
+                        mokuroData: mokuroData,
+                        volumeNumber: volumeNumber,
+                        existingByPath:
+                            existingVolumeByPath,
+                        existingByNumber:
+                            existingVolumeByNumber,
+                        reason: reason,
+                    });
+                }
+            } catch (fileError) {
+                console.error(
+                    `Error processing ${mokuroFile}:`,
+                    fileError
+                );
+                // Continue with other files
+            }
+        }
+
+        // Always update content record if:
+        // 1. Content doesn't exist, OR
+        // 2. Number of volumes changed, OR
+        // 3. Any volumes need processing
+        const shouldUpdateContent =
+            !existingContent ||
+            existingContent.volumes !==
+                mokuroFiles.length ||
+            volumesToProcess.length > 0;
+
+        if (!shouldUpdateContent && existingContent) {
+            console.log(
+                `No changes detected for ${directoryPath}`
+            );
+            return existingContent;
+        }
+
+        // Read the LATEST volume data for cover image (use last mokuro file by volume number)
+        const sortedByVolumeNumber = [
+            ...volumesToProcess,
+        ].sort((a, b) => a.volumeNumber - b.volumeNumber);
+        let latestMokuroData;
+
+        if (sortedByVolumeNumber.length > 0) {
+            // Use the highest volume number from volumes being processed
+            latestMokuroData =
+                sortedByVolumeNumber[
+                    sortedByVolumeNumber.length - 1
+                ].mokuroData;
+        } else {
+            // No volumes being processed, read the latest existing volume file
+            const latestMokuroFile = await joinPath(
+                directoryPath,
+                mokuroFiles[mokuroFiles.length - 1]
+            );
+            const latestMokuroContent = await readFile(
+                latestMokuroFile
+            );
+            latestMokuroData = JSON.parse(
+                latestMokuroContent
+            );
+        }
+
+        // Get the cover image from the first page of the LATEST volume
         let coverImage = null;
         if (
-            firstMokuroData.pages &&
-            firstMokuroData.pages.length > 0
+            latestMokuroData.pages &&
+            latestMokuroData.pages.length > 0
         ) {
-            const firstPage = firstMokuroData.pages[0];
+            const firstPage = latestMokuroData.pages[0];
             const imageName =
                 firstPage.img_path || "page_1.jpg";
             coverImage = await createContentImagePath(
                 contentId,
-                firstMokuroData.volume,
+                latestMokuroData.volume,
                 imageName,
                 directoryPath
             );
         }
 
-        // Create or update the content entity using Prisma
+        // Get content title
+        let contentTitle = existingContent?.title;
+        if (!contentTitle) {
+            contentTitle =
+                latestMokuroData.title ||
+                path.basename(directoryPath);
+        }
+
+        // Create or update the content entity
         const content = await db.content.upsert({
             where: { id: contentId },
             update: {
-                title:
-                    firstMokuroData.title ||
-                    path.basename(directoryPath),
+                title: contentTitle,
                 volumes: mokuroFiles.length,
                 coverImage: coverImage,
                 lastModified: lastModified,
@@ -214,7 +338,7 @@ async function importMangaFromDirectory(
             create: {
                 id: contentId,
                 title:
-                    firstMokuroData.title ||
+                    contentTitle ||
                     path.basename(directoryPath),
                 volumes: mokuroFiles.length,
                 coverImage: coverImage,
@@ -230,62 +354,41 @@ async function importMangaFromDirectory(
         // Create default user metadata if it doesn't exist
         await createDefaultUserMetadata(contentId);
 
-        // Get existing volumes to avoid reimporting
-        const existingVolumes =
-            existingContent?.contentVolumes || [];
-        const existingVolumeFilePaths = new Set(
-            existingVolumes.map((vol) => vol.filePath)
-        );
+        // Process volumes that need updating/creating
+        for (const volumeToProcess of volumesToProcess) {
+            const {
+                file: mokuroFile,
+                path: mokuroPath,
+                stats: volumeStats,
+                mokuroData,
+                volumeNumber,
+                existingByPath,
+                existingByNumber,
+                reason,
+            } = volumeToProcess;
 
-        // Process and import each volume
-        for (const mokuroFile of mokuroFiles) {
-            const mokuroPath = await joinPath(
-                directoryPath,
-                mokuroFile
+            console.log(
+                `Processing volume ${volumeNumber} (${mokuroFile}): ${reason}`
             );
 
-            // Skip this volume if it already exists by filepath
-            if (existingVolumeFilePaths.has(mokuroPath)) {
-                console.log(
-                    `Skipping existing volume: ${mokuroPath}`
-                );
-                continue;
-            }
-
-            const mokuroContent = await readFile(
-                mokuroPath
-            );
-            const mokuroData = JSON.parse(mokuroContent);
-
-            // Check for volume ID
+            // Use existing volume info if available, otherwise create new
             const volumeUuid =
-                mokuroData.volume_uuid || nanoid();
+                existingByPath?.volumeUuid ||
+                existingByNumber?.volumeUuid ||
+                mokuroData.volume_uuid ||
+                nanoid();
 
-            // Generate a new unique ID for this volume that's different from volumeUuid
-            // This ensures we don't have ID conflicts
-            const volumeId = nanoid();
-
-            // Skip if the volume UUID already exists (additional check)
-            if (
-                existingVolumes.some(
-                    (vol) => vol.volumeUuid === volumeUuid
-                )
-            ) {
-                console.log(
-                    `Skipping volume with duplicate UUID: ${volumeUuid}`
-                );
-                continue;
-            }
-
-            // Get file stats
-            const volumeStats = await getFileStats(
-                mokuroPath
-            );
+            const volumeId =
+                existingByPath?.id ||
+                existingByNumber?.id ||
+                nanoid();
             const volumeAddedDate =
-                volumeStats.birthtime || volumeStats.mtime;
-            const volumeLastModified = volumeStats.mtime;
+                existingByPath?.addedDate ||
+                existingByNumber?.addedDate ||
+                volumeStats.birthtime ||
+                volumeStats.mtime;
 
-            // Get cover image
+            // Get cover image for this volume
             let volumeCoverImage = null;
             if (
                 mokuroData.pages &&
@@ -312,12 +415,21 @@ async function importMangaFromDirectory(
                     directoryPath
                 );
 
-            // Extract volume number from volume name or use index
-            const volumeNumber =
-                extractVolumeNumber(mokuroData.volume) ||
-                mokuroFiles.indexOf(mokuroFile) + 1;
+            // Delete existing volume if we're updating (by either path or number)
+            if (existingByPath) {
+                await db.volume.delete({
+                    where: { id: existingByPath.id },
+                });
+            } else if (
+                existingByNumber &&
+                existingByNumber.id !== volumeId
+            ) {
+                await db.volume.delete({
+                    where: { id: existingByNumber.id },
+                });
+            }
 
-            // Create the volume
+            // Create the updated/new volume
             const volume = await db.volume.create({
                 data: {
                     id: volumeId,
@@ -331,7 +443,7 @@ async function importMangaFromDirectory(
                     pageCount:
                         mokuroData.pages?.length || 0,
                     addedDate: volumeAddedDate,
-                    lastModified: volumeLastModified,
+                    lastModified: volumeStats.mtime,
                     volumeUuid: volumeUuid,
                     volumeType: "manga",
                     previewImages:
@@ -349,6 +461,9 @@ async function importMangaFromDirectory(
             );
         }
 
+        console.log(
+            `Processed ${volumesToProcess.length} volumes for ${directoryPath}`
+        );
         revalidatePath(`/content/${contentId}`);
         return content;
     } catch (error) {
@@ -357,7 +472,6 @@ async function importMangaFromDirectory(
             error
         );
 
-        // If this is not a custom path, update the content entity with error status
         if (!isCustomPath && providedContentId) {
             try {
                 await db.content.update({
@@ -383,9 +497,7 @@ async function importMangaFromDirectory(
     }
 }
 
-/**
- * Import light novel from a directory with .epub files
- */
+// Fixed light novel import function - properly handles new volumes
 async function importLightNovelFromDirectory(
     directoryPath: string,
     providedContentId: string | null = null,
@@ -394,7 +506,6 @@ async function importLightNovelFromDirectory(
     const now = new Date();
 
     try {
-        // Dynamically import server-only functions
         const { readDirectory, getFileStats, fileExists } =
             await import("@/lib/server/fs-adapter");
 
@@ -410,96 +521,57 @@ async function importLightNovelFromDirectory(
             );
         }
 
+        // Sort epub files to ensure consistent ordering
+        epubFiles.sort();
+
         // Get stats for the directory
         const stats = await getFileStats(directoryPath);
         const seriesName = path.basename(directoryPath);
-        const contentId = providedContentId || nanoid();
 
-        // Create metadata directory: /directoryPath/.metadata/
+        // Check if content already exists
+        const existingContent = await db.content.findFirst({
+            where: { directoryPath: directoryPath },
+            include: {
+                contentVolumes: {
+                    where: { volumeType: "epub" },
+                    orderBy: { volumeNumber: "asc" },
+                },
+            },
+        });
+
+        const contentId =
+            existingContent?.id ||
+            providedContentId ||
+            nanoid();
+
+        // Create metadata directory
         const metadataDir = path.join(
             directoryPath,
             ".metadata"
         );
 
-        // Check if content already exists with this directory path
-        // NOTE: This check is now redundant as importContent already does this check
-        // We keep it here for the existingVolumes data we need later
-        const existingContent = await db.content.findFirst({
-            where: { directoryPath: directoryPath },
-            include: {
-                contentVolumes: true,
-            },
-        });
+        // Build maps of existing volumes
+        const existingVolumesByPath = new Map();
+        const existingVolumesByNumber = new Map();
 
-        // Get the first EPUB to extract metadata
-        const firstEpubPath = path.join(
-            directoryPath,
-            epubFiles[0]
-        );
+        if (existingContent?.contentVolumes) {
+            existingContent.contentVolumes.forEach(
+                (vol) => {
+                    existingVolumesByPath.set(
+                        vol.filePath,
+                        vol
+                    );
+                    existingVolumesByNumber.set(
+                        vol.volumeNumber,
+                        vol
+                    );
+                }
+            );
+        }
 
-        // Create a volume-specific metadata directory for the first volume
-        const firstVolumeMetadataDir = path.join(
-            metadataDir,
-            "vol1"
-        );
-        await fs.mkdir(firstVolumeMetadataDir, {
-            recursive: true,
-        });
+        // Check ALL epub files and determine what needs processing
+        const volumesToProcess = [];
 
-        const extractResult = await extractEpubMetadata(
-            firstEpubPath,
-            firstVolumeMetadataDir
-        );
-
-        // Create or update content record
-        const content = await db.content.upsert({
-            where: { id: existingContent?.id || contentId },
-            update: {
-                lastModified: stats.mtime,
-                lastScanned: now,
-                scanStatus: "complete",
-                contentType: "lightnovel",
-                volumes: epubFiles.length,
-                ...(extractResult.coverImagePath && {
-                    coverImage: createEpubImageUrl(
-                        extractResult.coverImagePath
-                    ),
-                }),
-            },
-            create: {
-                id: contentId,
-                title: seriesName,
-                volumes: epubFiles.length,
-                addedDate: stats.birthtime || stats.mtime,
-                lastModified: stats.mtime,
-                directoryPath,
-                lastScanned: now,
-                scanStatus: "complete",
-                contentType: "lightnovel",
-                coverImage: extractResult.coverImagePath
-                    ? createEpubImageUrl(
-                          extractResult.coverImagePath
-                      )
-                    : undefined,
-            },
-        });
-
-        // Create user metadata if needed
-        await createDefaultUserMetadata(
-            content.id,
-            extractResult.metadata
-        );
-
-        // Get existing volumes to avoid reimporting
-        const existingVolumes =
-            existingContent?.contentVolumes || [];
-        const existingVolumesByNumber = new Map(
-            existingVolumes
-                .filter((v) => v.volumeType === "epub")
-                .map((v) => [v.volumeNumber, v])
-        );
-
-        // Process each EPUB file
         for (const epubFile of epubFiles) {
             const epubPath = path.join(
                 directoryPath,
@@ -513,25 +585,197 @@ async function importLightNovelFromDirectory(
                 continue;
             }
 
-            const epubStats = await getFileStats(epubPath);
-            const volumeNumber =
-                extractVolumeNumber(epubPath) || 1;
-
-            // Check if already imported and up to date
-            const existingVolume =
-                existingVolumesByNumber.get(volumeNumber);
-            if (
-                existingVolume &&
-                existingVolume.lastModified >=
-                    epubStats.mtime
-            ) {
-                console.log(
-                    `Volume ${volumeNumber} is up to date, skipping`
+            try {
+                const epubStats = await getFileStats(
+                    epubPath
                 );
-                continue;
-            }
+                const volumeNumber =
+                    extractVolumeNumber(epubPath) || 1;
 
-            // Create a volume-specific metadata directory
+                const existingByPath =
+                    existingVolumesByPath.get(epubPath);
+                const existingByNumber =
+                    existingVolumesByNumber.get(
+                        volumeNumber
+                    );
+
+                // Determine if we need to process this volume
+                let shouldProcess = false;
+                let reason = "";
+
+                if (!existingByPath && !existingByNumber) {
+                    // Completely new volume
+                    shouldProcess = true;
+                    reason = "new volume";
+                } else if (
+                    existingByPath &&
+                    epubStats.mtime >
+                        existingByPath.lastModified
+                ) {
+                    // Existing volume file was modified
+                    shouldProcess = true;
+                    reason = "file updated";
+                } else if (
+                    !existingByPath &&
+                    existingByNumber
+                ) {
+                    // Volume number exists but path is different (file moved/renamed)
+                    shouldProcess = true;
+                    reason = "file path changed";
+                }
+
+                if (shouldProcess) {
+                    volumesToProcess.push({
+                        file: epubFile,
+                        path: epubPath,
+                        stats: epubStats,
+                        volumeNumber,
+                        existingByPath,
+                        existingByNumber,
+                        reason,
+                    });
+                }
+            } catch (fileError) {
+                console.error(
+                    `Error processing ${epubFile}:`,
+                    fileError
+                );
+                // Continue with other files
+            }
+        }
+
+        // Always update content if volumes count changed or volumes need processing
+        const shouldUpdateContent =
+            !existingContent ||
+            existingContent.volumes !== epubFiles.length ||
+            volumesToProcess.length > 0;
+
+        if (!shouldUpdateContent && existingContent) {
+            console.log(
+                `No changes detected for ${directoryPath}`
+            );
+            return existingContent;
+        }
+
+        // Get metadata from the latest volume for cover image
+        let coverImagePath = null;
+
+        if (volumesToProcess.length > 0) {
+            // Use the latest volume being processed (highest volume number)
+            const sortedByVolumeNumber = [
+                ...volumesToProcess,
+            ].sort(
+                (a, b) => a.volumeNumber - b.volumeNumber
+            );
+            const latestVolume =
+                sortedByVolumeNumber[
+                    sortedByVolumeNumber.length - 1
+                ];
+
+            const latestVolumeMetadataDir = path.join(
+                metadataDir,
+                `vol${latestVolume.volumeNumber}`
+            );
+            await fs.mkdir(latestVolumeMetadataDir, {
+                recursive: true,
+            });
+
+            const extractResult = await extractEpubMetadata(
+                latestVolume.path,
+                latestVolumeMetadataDir
+            );
+            coverImagePath = extractResult.coverImagePath;
+        } else if (
+            existingContent?.contentVolumes &&
+            existingContent.contentVolumes.length > 0
+        ) {
+            // No new volumes, use existing latest volume's cover
+            const latestExistingVolume =
+                existingContent.contentVolumes[
+                    existingContent.contentVolumes.length -
+                        1
+                ];
+            if (latestExistingVolume.coverImage) {
+                coverImagePath =
+                    latestExistingVolume.coverImage.replace(
+                        "/api/media?absolutePath=",
+                        ""
+                    );
+                coverImagePath =
+                    decodeURIComponent(coverImagePath);
+            }
+        }
+
+        // Create or update content record
+        const content = await db.content.upsert({
+            where: { id: contentId },
+            update: {
+                volumes: epubFiles.length,
+                lastModified: stats.mtime,
+                lastScanned: now,
+                scanStatus: "complete",
+                contentType: "lightnovel",
+                ...(coverImagePath && {
+                    coverImage:
+                        createEpubImageUrl(coverImagePath),
+                }),
+            },
+            create: {
+                id: contentId,
+                title: seriesName,
+                volumes: epubFiles.length,
+                addedDate: stats.birthtime || stats.mtime,
+                lastModified: stats.mtime,
+                directoryPath,
+                lastScanned: now,
+                scanStatus: "complete",
+                contentType: "lightnovel",
+                coverImage: coverImagePath
+                    ? createEpubImageUrl(coverImagePath)
+                    : undefined,
+            },
+        });
+
+        // Create user metadata if needed (use first volume's metadata if available)
+        if (volumesToProcess.length > 0) {
+            const firstVolume = volumesToProcess[0];
+            const firstVolumeMetadataDir = path.join(
+                metadataDir,
+                `vol${firstVolume.volumeNumber}`
+            );
+            await fs.mkdir(firstVolumeMetadataDir, {
+                recursive: true,
+            });
+
+            const extractResult = await extractEpubMetadata(
+                firstVolume.path,
+                firstVolumeMetadataDir
+            );
+            await createDefaultUserMetadata(
+                content.id,
+                extractResult.metadata
+            );
+        } else {
+            await createDefaultUserMetadata(content.id);
+        }
+
+        // Process volumes that need updating/creating
+        for (const volumeToProcess of volumesToProcess) {
+            const {
+                file: epubFile,
+                path: epubPath,
+                stats: epubStats,
+                volumeNumber,
+                existingByPath,
+                existingByNumber,
+                reason,
+            } = volumeToProcess;
+
+            console.log(
+                `Processing EPUB volume ${volumeNumber} (${epubFile}): ${reason}`
+            );
+
+            // Create volume-specific metadata directory
             const volumeMetadataDir = path.join(
                 metadataDir,
                 `vol${volumeNumber}`
@@ -546,17 +790,39 @@ async function importLightNovelFromDirectory(
                 volumeMetadataDir
             );
 
-            // Delete existing volume if updating
-            if (existingVolume) {
+            // Use existing volume info if available
+            const volumeUuid =
+                existingByPath?.volumeUuid ||
+                existingByNumber?.volumeUuid ||
+                nanoid();
+            const volumeId =
+                existingByPath?.id ||
+                existingByNumber?.id ||
+                nanoid();
+            const volumeAddedDate =
+                existingByPath?.addedDate ||
+                existingByNumber?.addedDate ||
+                epubStats.birthtime ||
+                epubStats.mtime;
+
+            // Delete existing volume if we're updating
+            if (existingByPath) {
                 await db.volume.delete({
-                    where: { id: existingVolume.id },
+                    where: { id: existingByPath.id },
+                });
+            } else if (
+                existingByNumber &&
+                existingByNumber.id !== volumeId
+            ) {
+                await db.volume.delete({
+                    where: { id: existingByNumber.id },
                 });
             }
 
-            // Create EPUB volume record
+            // Create volume record
             await db.volume.create({
                 data: {
-                    id: nanoid(),
+                    id: volumeId,
                     contentId: content.id,
                     volumeNumber: volumeNumber,
                     volumeTitle:
@@ -567,20 +833,21 @@ async function importLightNovelFromDirectory(
                               extractResult.coverImagePath
                           )
                         : undefined,
-                    addedDate:
-                        epubStats.birthtime ||
-                        epubStats.mtime,
+                    addedDate: volumeAddedDate,
                     lastModified: epubStats.mtime,
-                    volumeUuid: nanoid(),
+                    volumeUuid: volumeUuid,
                     volumeType: "epub",
                     metadata: JSON.stringify(
                         extractResult.metadata
                     ),
-                    pageCount: 0, // Not applicable for EPUB
+                    pageCount: 0,
                 },
             });
         }
 
+        console.log(
+            `Processed ${volumesToProcess.length} EPUB volumes for ${directoryPath}`
+        );
         revalidatePath(`/content/${content.id}`);
         return content;
     } catch (error) {
@@ -589,7 +856,6 @@ async function importLightNovelFromDirectory(
             error
         );
 
-        // If this is not a custom path, update the content entity with error status
         if (!isCustomPath && providedContentId) {
             try {
                 await db.content.update({

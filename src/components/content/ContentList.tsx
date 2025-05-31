@@ -184,9 +184,7 @@ export function ContentList({
             <CardFooter>
                 <p className="text-sm text-gray-500">
                     Last updated:{" "}
-                    {new Date(
-                        contentList[0].addedDate
-                    ).toLocaleString()}
+                    {new Date().toLocaleDateString()}
                 </p>
             </CardFooter>
         </Card>
