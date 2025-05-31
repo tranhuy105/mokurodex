@@ -2,13 +2,14 @@ import { IDBPDatabase, openDB } from "idb";
 
 // Define the database name and version
 export const DB_NAME = "mokurodex-offline";
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 // Define the required object stores
 export const STORES = {
     DOWNLOADS: "downloads",
     IMAGES: "images",
     EPUBS: "epubs",
+    HTML: "html",
 };
 
 /**
@@ -57,6 +58,15 @@ export async function initializeOfflineDB(): Promise<IDBPDatabase> {
             ) {
                 console.log("Creating epubs store");
                 db.createObjectStore(STORES.EPUBS, {
+                    keyPath: "id",
+                });
+            }
+
+            if (
+                !db.objectStoreNames.contains(STORES.HTML)
+            ) {
+                console.log("Creating html store");
+                db.createObjectStore(STORES.HTML, {
                     keyPath: "id",
                 });
             }

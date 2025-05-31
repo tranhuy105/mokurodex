@@ -1,0 +1,263 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #0f172a;
+    color: #e2e8f0;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+.header {
+    background-color: #1e293b;
+    border-bottom: 1px solid #334155;
+    padding: 1rem 0;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.nav-links {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.nav-button {
+    background: transparent;
+    border: 1px solid #475569;
+    color: #e2e8f0;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.nav-button:hover {
+    background-color: #334155;
+}
+
+.nav-button.active {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+.loading-container, .message-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    text-align: center;
+}
+
+.loading-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 2px solid #334155;
+    border-top: 2px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1.5rem;
+    padding: 2rem 0;
+}
+
+.content-card {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.content-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.content-cover {
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    font-weight: bold;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.content-info {
+    padding: 1rem;
+}
+
+.content-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.content-subtitle {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.875rem;
+    color: #94a3b8;
+    line-height: 1.3;
+}
+
+.content-type {
+    display: inline-block;
+    background-color: #374151;
+    color: #d1d5db;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.reader-container {
+}
+
+.back-button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: transparent;
+    border: 1px solid #475569;
+    color: #e2e8f0;
+    padding: 0.75rem 1rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    margin-bottom: 2rem;
+    transition: all 0.2s;
+}
+
+.back-button:hover {
+    background-color: #334155;
+}
+
+.manga-reader {
+    text-align: center;
+}
+
+.manga-page-container {
+    margin-bottom: 2rem;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.manga-page {
+    max-width: 100%;
+    max-height: 80vh;
+    object-fit: contain;
+    border-radius: 0.5rem;
+}
+
+.manga-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.reader-button {
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.reader-button:hover {
+    background-color: #2563eb;
+}
+
+.reader-button:disabled {
+    background-color: #6b7280;
+    cursor: not-allowed;
+}
+
+.epub-reader {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.epub-content {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 0.5rem;
+    padding: 2rem;
+    text-align: center;
+}
+
+.epub-content h1 {
+    color: #3b82f6;
+    margin-bottom: 1.5rem;
+}
+
+.offline-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #f59e0b;
+    color: #0f172a;
+    padding: 8px 16px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.error-message, .message-toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 1rem;
+    border-radius: 0.375rem;
+    z-index: 9999;
+    color: white;
+    font-weight: 500;
+}
+
+.error-message {
+    background-color: #dc2626;
+}
+
+.debug-info {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin: 1rem 0;
+    font-family: monospace;
+    font-size: 0.875rem;
+}

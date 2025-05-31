@@ -8,8 +8,12 @@ declare module "next-pwa" {
         skipWaiting?: boolean;
         scope?: string;
         sw?: string;
+        disableGeneratedSw?: boolean;
+        buildExcludes?: RegExp[];
+        mode?: "production" | "development";
+        customWorkerDir?: string;
         runtimeCaching?: Array<{
-            urlPattern: RegExp | string;
+            urlPattern: string | RegExp;
             handler: string;
             options?: {
                 cacheName?: string;
@@ -17,31 +21,11 @@ declare module "next-pwa" {
                     maxEntries?: number;
                     maxAgeSeconds?: number;
                 };
-                networkTimeoutSeconds?: number;
-                backgroundSync?: {
-                    name: string;
-                    options?: {
-                        maxRetentionTime?: number;
-                    };
-                };
-                cacheableResponse?: {
-                    statuses: number[];
-                    headers: {
-                        [key: string]: string;
-                    };
-                };
-                broadcastUpdate?: {
-                    channelName: string;
-                    options?: {
-                        headersToCheck: string[];
-                    };
-                };
-                plugins?: unknown[];
-                fetchOptions?: {
-                    mode?: string;
-                    cache?: string;
-                };
             };
+        }>;
+        additionalManifestEntries?: Array<{
+            url: string;
+            revision: string | null;
         }>;
     }
 

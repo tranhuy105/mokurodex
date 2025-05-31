@@ -42,7 +42,6 @@
     "mokurodex": "file:",
     "nanoid": "^5.1.5",
     "next": "15.3.2",
-    "next-pwa": "^5.6.0",
     "next-reader": "file:",
     "next-themes": "^0.4.6",
     "prisma": "^6.8.2",

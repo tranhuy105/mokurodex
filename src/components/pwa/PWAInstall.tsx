@@ -41,6 +41,8 @@ export function PWAInstall() {
                 toast.success(
                     "App is running in offline mode"
                 );
+            } else {
+                toast.success("Back online!");
             }
         };
 
@@ -84,10 +86,7 @@ export function PWAInstall() {
             return;
         }
 
-        // Show the install prompt
         await installPrompt.prompt();
-
-        // Wait for the user to respond to the prompt
         const choiceResult = await installPrompt.userChoice;
 
         if (choiceResult.outcome === "accepted") {
@@ -97,12 +96,29 @@ export function PWAInstall() {
             toast.error("App installation was canceled");
         }
 
-        // Clear the saved prompt since it can't be used again
         setInstallPrompt(null);
     };
 
     if (isInstalled) {
-        return null;
+        return (
+            <>
+                {isOffline && (
+                    <div className="fixed bottom-4 right-4 bg-amber-500 text-white px-3 py-2 rounded-md shadow-lg flex items-center gap-2 z-50">
+                        <WifiOff size={16} />
+                        <span>
+                            Offline Mode - Reading
+                            Downloaded Content
+                        </span>
+                        <a
+                            href="/offline.html"
+                            className="ml-2 bg-white text-amber-500 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100"
+                        >
+                            Open Offline Reader
+                        </a>
+                    </div>
+                )}
+            </>
+        );
     }
 
     return (
@@ -111,6 +127,12 @@ export function PWAInstall() {
                 <div className="fixed bottom-4 right-4 bg-amber-500 text-white px-3 py-2 rounded-md shadow-lg flex items-center gap-2 z-50">
                     <WifiOff size={16} />
                     <span>Offline Mode</span>
+                    <a
+                        href="/offline.html"
+                        className="ml-2 bg-white text-amber-500 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100"
+                    >
+                        Open Offline Reader
+                    </a>
                 </div>
             )}
 

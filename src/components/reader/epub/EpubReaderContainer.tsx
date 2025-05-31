@@ -197,7 +197,7 @@ export default function EpubReaderContainer({
                     initialPosition={initialPosition}
                 />
             </div>
-            <div className="sticky bottom-0 left-0 right-0 p-4 bg-background border-t flex justify-center z-10">
+            <div className="sticky bottom-0 left-0 right-0 p-4  flex justify-center z-10">
                 <OfflineManager
                     contentId={contentId}
                     contentTitle={

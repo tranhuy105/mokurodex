@@ -3,6 +3,7 @@ import { PWAInstall } from "@/components/pwa/PWAInstall";
 import NavbarWrapper from "@/components/ui/NavbarWrapper";
 import Providers from "@/context/Providers";
 import { ThemeProvider } from "next-themes";
+import Script from "next/script";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
@@ -64,6 +65,18 @@ export default function RootLayout({
                         </QueryClientProviderWrapper>
                     </Providers>
                 </ThemeProvider>
+                <Script
+                    id="sw-register"
+                    strategy="afterInteractive"
+                >
+                    {`
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.register('/sw.js')
+                .then(() => console.log('SW registered'))
+                .catch(() => console.log('SW registration failed'));
+            }
+          `}
+                </Script>
             </body>
         </html>
     );
