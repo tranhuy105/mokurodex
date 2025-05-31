@@ -18,7 +18,6 @@ import {
     Trash2,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 
 interface ContentListProps {
     contentType: "manga" | "ln";
@@ -122,7 +121,7 @@ export function ContentList({
 
                                     {/* Volume badge */}
                                     <div className="absolute bottom-2 left-2">
-                                        <Badge className="bg-black/70 hover:bg-black/80">
+                                        <Badge className="bg-black/70 hover:bg-black/80 text-white">
                                             {item.volumes}{" "}
                                             {item.volumes ===
                                             1
@@ -177,16 +176,6 @@ export function ContentList({
                                             </p>
                                         )}
                                 </div>
-
-                                {/* Link overlay - makes the entire card clickable */}
-                                <Link
-                                    href={`/content/${item.id}`}
-                                    className="absolute inset-0"
-                                >
-                                    <span className="sr-only">
-                                        View {item.title}
-                                    </span>
-                                </Link>
                             </Card>
                         ))}
                     </div>
@@ -195,7 +184,7 @@ export function ContentList({
             <CardFooter>
                 <p className="text-sm text-gray-500">
                     Last updated:{" "}
-                    {new Date().toLocaleString()}
+                    {new Date().toLocaleDateString()}
                 </p>
             </CardFooter>
         </Card>
