@@ -894,6 +894,9 @@ export async function getAllContentWithUserData() {
                     orderBy: { timestamp: "desc" },
                     take: 1,
                 },
+                contentVolumes: {
+                    orderBy: { volumeNumber: "asc" },
+                },
             },
             orderBy: {
                 lastModified: "desc",
