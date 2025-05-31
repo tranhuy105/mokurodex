@@ -1,5 +1,6 @@
 "use client";
 
+import { OfflineManager } from "@/components/pwa/OfflineManager";
 import { SimpleEpubReader } from "@/components/reader/epub/SimpleEpubReader";
 import { useEpubFileUrl } from "@/hooks/use-content";
 import {
@@ -188,10 +189,26 @@ export default function EpubReaderContainer({
     }
 
     return (
-        <SimpleEpubReader
-            epubData={epubData}
-            onPositionChange={handlePositionChange}
-            initialPosition={initialPosition}
-        />
+        <div className="flex flex-col h-screen">
+            <div className="flex-grow">
+                <SimpleEpubReader
+                    epubData={epubData}
+                    onPositionChange={handlePositionChange}
+                    initialPosition={initialPosition}
+                />
+            </div>
+            <div className="sticky bottom-0 left-0 right-0 p-4 bg-background border-t flex justify-center z-10">
+                <OfflineManager
+                    contentId={contentId}
+                    contentTitle={
+                        volume.volumeTitle || "Light Novel"
+                    }
+                    contentType="lightnovel"
+                    volumeId={volume.id}
+                    volumeNumber={volume.volumeNumber}
+                    volumeTitle={volume.volumeTitle}
+                />
+            </div>
+        </div>
     );
 }

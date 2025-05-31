@@ -1,4 +1,5 @@
 import { QueryClientProviderWrapper } from "@/components/provider/query-client-provider";
+import { PWAInstall } from "@/components/pwa/PWAInstall";
 import NavbarWrapper from "@/components/ui/NavbarWrapper";
 import Providers from "@/context/Providers";
 import { ThemeProvider } from "next-themes";
@@ -43,28 +44,25 @@ export const metadata = {
 
 export default function RootLayout({
     children,
-}: Readonly<{
+}: {
     children: React.ReactNode;
-}>) {
+}) {
     return (
-        <html
-            lang="en"
-            suppressHydrationWarning
-            className="no-scrollbar"
-        >
-            <body className="antialiased bg-gray-100 dark:bg-gray-900 min-h-screen">
+        <html lang="en" suppressHydrationWarning>
+            <body className="min-h-screen bg-background antialiased">
                 <ThemeProvider
                     attribute="class"
                     defaultTheme="system"
                     enableSystem
                 >
-                    <QueryClientProviderWrapper>
-                        <Providers>
+                    <Providers>
+                        <QueryClientProviderWrapper>
                             <NavbarWrapper />
                             <main>{children}</main>
+                            <PWAInstall />
                             <Toaster position="bottom-right" />
-                        </Providers>
-                    </QueryClientProviderWrapper>
+                        </QueryClientProviderWrapper>
+                    </Providers>
                 </ThemeProvider>
             </body>
         </html>

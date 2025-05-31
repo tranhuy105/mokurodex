@@ -1,21 +1,40 @@
 {
-  "name": "MokuroDex",
-  "short_name": "MokuroDex",
-  "description": "Manga reader with Mokuro integration for japanese learning",
-  "icons": [
-    {
-      "src": "/android-chrome-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/android-chrome-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ],
-  "theme_color": "#6366F1",
-  "background_color": "#6366F1",
-  "display": "standalone",
-  "start_url": "/"
+    "name": "MokuroDex",
+    "short_name": "MokuroDex",
+    "description": "Manga reader with Mokuro integration for japanese learning",
+    "icons": [
+        {
+            "src": "/android-chrome-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/android-chrome-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "theme_color": "#18181b",
+    "background_color": "#18181b",
+    "display": "standalone",
+    "orientation": "portrait",
+    "start_url": "/",
+    "scope": "/",
+    "prefer_related_applications": false,
+    "shortcuts": [
+        {
+            "name": "Content Library",
+            "short_name": "Library",
+            "description": "View your content library",
+            "url": "/content"
+        },
+        {
+            "name": "Continue Reading",
+            "short_name": "Continue",
+            "description": "Continue where you left off",
+            "url": "/"
+        }
+    ]
 }

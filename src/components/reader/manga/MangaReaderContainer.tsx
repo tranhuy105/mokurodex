@@ -1,5 +1,6 @@
 "use client";
 
+import { OfflineManager } from "@/components/pwa/OfflineManager";
 import {
     useUpdateReadingHistory,
     useVolumePages,
@@ -270,16 +271,35 @@ export default function MangaReaderContainer({
 
     // Main render method
     return (
-        <MangaReader
-            manga={mangaId}
-            volume={currentVolume}
-            pages={pages}
-            volumes={volumes}
-            initialPage={currentPage}
-            onPageChange={handlePageChange}
-            onVolumeChange={handleVolumeChange}
-            isLoading={isLoading || isPagesLoading}
-            showControls={true}
-        />
+        <div className="flex flex-col min-h-screen">
+            <div className="flex-grow">
+                <MangaReader
+                    manga={mangaId}
+                    volume={currentVolume}
+                    pages={pages}
+                    volumes={volumes}
+                    initialPage={currentPage}
+                    onPageChange={handlePageChange}
+                    onVolumeChange={handleVolumeChange}
+                    isLoading={isLoading || isPagesLoading}
+                    showControls={true}
+                />
+            </div>
+
+            <div className="sticky bottom-0 left-0 right-0 p-4 bg-none flex justify-center z-10">
+                <OfflineManager
+                    contentId={mangaId}
+                    contentTitle={
+                        currentVolume.volumeTitle || "Manga"
+                    }
+                    contentType="manga"
+                    volumeId={currentVolume.id}
+                    volumeNumber={
+                        currentVolume.volumeNumber
+                    }
+                    volumeTitle={currentVolume.volumeTitle}
+                />
+            </div>
+        </div>
     );
 }
