@@ -21,7 +21,7 @@ function getAnkiConnectUrl() {
   if (isMobileDevice()) {
     // Lấy hostname hiện tại (PC host trong mạng LAN)
     const host = window.location.hostname;
-    return `http://${host}:8765`;
+    return `https://${host}:8877`;
   }
 
   // Nếu là PC, sử dụng AnkiConnect URL local từ config

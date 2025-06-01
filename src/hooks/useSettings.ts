@@ -5,7 +5,12 @@ import {
     getSettings,
     updateSettings as updateSettingsAction,
 } from "@/server/actions/settings";
-import { useCallback, useEffect, useState } from "react";
+import {
+    useMutation,
+    useQuery,
+    useQueryClient,
+} from "@tanstack/react-query";
+import { useCallback } from "react";
 import { toast } from "react-hot-toast";
 
 // Reading modes similar to MangaDex
@@ -91,207 +96,175 @@ function castToEnum<T extends string>(
 
 /**
  * Hook to access and update application settings
- * Uses a database backend instead of client-side storage
+ * Uses React Query for efficient caching and state management
  */
 export function useSettings() {
-    const [settings, setSettings] =
-        useState<Settings>(defaultSettings);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
+    const queryClient = useQueryClient();
 
-    // Load settings from database on component mount
-    useEffect(() => {
-        let isMounted = true;
-
-        async function loadSettings() {
+    // Use React Query to fetch and cache settings
+    const {
+        data: settings,
+        isLoading,
+        error,
+    } = useQuery({
+        queryKey: ["settings"],
+        queryFn: async () => {
             try {
-                setIsLoading(true);
                 const dbSettings = await getSettings();
 
-                if (isMounted) {
-                    if (!dbSettings) {
-                        // If no settings in DB, use defaults
-                        console.log(
-                            "No settings found in database, using defaults"
-                        );
-                        setSettings(defaultSettings);
-                    } else {
-                        // Convert the database settings to our local Settings type
-                        const loadedSettings: Settings = {
-                            darkMode: dbSettings.darkMode,
-                            invertColors:
-                                dbSettings.invertColors,
-                            rightToLeft:
-                                dbSettings.rightToLeft,
-                            hasCover: dbSettings.hasCover,
-                            showTooltips:
-                                dbSettings.showTooltips,
-                            ankiEnabled:
-                                dbSettings.ankiEnabled,
-                            fontSize:
-                                dbSettings.fontSize as number,
-                            readingMode: castToEnum(
-                                dbSettings.readingMode,
-                                defaultSettings.readingMode,
-                                [
-                                    "singlePage",
-                                    "doublePage",
-                                    "longStrip",
-                                ]
-                            ),
-                            // New settings
-                            animatePageTurns:
-                                dbSettings.animatePageTurns ??
-                                defaultSettings.animatePageTurns,
-                            highlightColor:
-                                dbSettings.highlightColor ??
-                                defaultSettings.highlightColor,
-                            readerBackground:
-                                dbSettings.readerBackground ??
-                                defaultSettings.readerBackground,
-                            pageMargin:
-                                dbSettings.pageMargin ??
-                                defaultSettings.pageMargin,
-                            furiganaDisplay: castToEnum(
-                                dbSettings.furiganaDisplay,
-                                defaultSettings.furiganaDisplay,
-                                ["always", "hover", "never"]
-                            ),
-                            autoSavePosition:
-                                dbSettings.autoSavePosition ??
-                                defaultSettings.autoSavePosition,
-                            dictionaryProvider: castToEnum(
-                                dbSettings.dictionaryProvider,
-                                defaultSettings.dictionaryProvider,
-                                [
-                                    "jisho",
-                                    "google",
-                                    "custom",
-                                ]
-                            ),
-                            customDictionaryUrl:
-                                dbSettings.customDictionaryUrl ??
-                                defaultSettings.customDictionaryUrl,
-                            pageNavigationMethod:
-                                castToEnum(
-                                    dbSettings.pageNavigationMethod,
-                                    defaultSettings.pageNavigationMethod,
-                                    [
-                                        "click",
-                                        "tap",
-                                        "swipe",
-                                        "arrows",
-                                    ]
-                                ),
-                            // Get mangaDir from config if not in database
-                            mangaDir: config.mangaDir,
-                        };
-                        setSettings(loadedSettings);
-                        console.log(
-                            "Settings loaded from database:",
-                            loadedSettings
-                        );
-                    }
+                if (!dbSettings) {
+                    console.log(
+                        "No settings found in database, using defaults"
+                    );
+                    return defaultSettings;
                 }
+
+                // Convert the database settings to our local Settings type
+                const loadedSettings: Settings = {
+                    darkMode: dbSettings.darkMode,
+                    invertColors: dbSettings.invertColors,
+                    rightToLeft: dbSettings.rightToLeft,
+                    hasCover: dbSettings.hasCover,
+                    showTooltips: dbSettings.showTooltips,
+                    ankiEnabled: dbSettings.ankiEnabled,
+                    fontSize: dbSettings.fontSize as number,
+                    readingMode: castToEnum(
+                        dbSettings.readingMode,
+                        defaultSettings.readingMode,
+                        [
+                            "singlePage",
+                            "doublePage",
+                            "longStrip",
+                        ]
+                    ),
+                    animatePageTurns:
+                        dbSettings.animatePageTurns ??
+                        defaultSettings.animatePageTurns,
+                    highlightColor:
+                        dbSettings.highlightColor ??
+                        defaultSettings.highlightColor,
+                    readerBackground:
+                        dbSettings.readerBackground ??
+                        defaultSettings.readerBackground,
+                    pageMargin:
+                        dbSettings.pageMargin ??
+                        defaultSettings.pageMargin,
+                    furiganaDisplay: castToEnum(
+                        dbSettings.furiganaDisplay,
+                        defaultSettings.furiganaDisplay,
+                        ["always", "hover", "never"]
+                    ),
+                    autoSavePosition:
+                        dbSettings.autoSavePosition ??
+                        defaultSettings.autoSavePosition,
+                    dictionaryProvider: castToEnum(
+                        dbSettings.dictionaryProvider,
+                        defaultSettings.dictionaryProvider,
+                        ["jisho", "google", "custom"]
+                    ),
+                    customDictionaryUrl:
+                        dbSettings.customDictionaryUrl ??
+                        defaultSettings.customDictionaryUrl,
+                    pageNavigationMethod: castToEnum(
+                        dbSettings.pageNavigationMethod,
+                        defaultSettings.pageNavigationMethod,
+                        ["click", "tap", "swipe", "arrows"]
+                    ),
+                    mangaDir: config.mangaDir,
+                };
+
+                console.log(
+                    "Settings loaded from database:",
+                    loadedSettings
+                );
+                return loadedSettings;
             } catch (err) {
-                if (isMounted) {
-                    console.error(
-                        "Error loading settings:",
-                        err
-                    );
-                    setError(
-                        err instanceof Error
-                            ? err
-                            : new Error(String(err))
-                    );
-                    toast.error("Failed to load settings");
-                }
-            } finally {
-                if (isMounted) {
-                    setIsLoading(false);
-                }
+                console.error(
+                    "Error loading settings:",
+                    err
+                );
+                toast.error("Failed to load settings");
+                throw err;
             }
-        }
+        },
+        staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+        gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    });
 
-        loadSettings();
+    // Use mutation for updating settings
+    const mutation = useMutation({
+        mutationFn: updateSettingsAction,
+        onMutate: async (newSettings) => {
+            // Optimistically update the cache
+            const previousSettings =
+                queryClient.getQueryData(["settings"]);
 
-        // Cleanup function for unmounting
-        return () => {
-            isMounted = false;
-        };
-    }, []);
+            queryClient.setQueryData(
+                ["settings"],
+                (old: Settings) => ({
+                    ...old,
+                    ...newSettings,
+                })
+            );
+
+            return { previousSettings };
+        },
+        onError: (err, _, context) => {
+            // On error, revert to previous settings
+            queryClient.setQueryData(
+                ["settings"],
+                context?.previousSettings
+            );
+            console.error("Error updating settings:", err);
+            toast.error("Failed to save settings");
+        },
+        onSuccess: (updatedSettings) => {
+            console.log(
+                "Settings updated in database:",
+                updatedSettings
+            );
+
+            // Only reload the page if we're not on a settings page
+            if (
+                typeof window !== "undefined" &&
+                !window.location.pathname.startsWith(
+                    "/settings"
+                )
+            ) {
+                // We're in the reader - reload to get fresh settings
+                console.log(
+                    "Reloading page to refresh settings"
+                );
+                window.location.reload();
+            } else {
+                console.log(
+                    "On settings page - not reloading"
+                );
+            }
+        },
+    });
 
     // Function to update settings
     const updateSettings = useCallback(
         async (newSettings: Partial<Settings>) => {
-            try {
-                // Log the settings change for debugging
-                if (process.env.NODE_ENV !== "production") {
-                    console.log(
-                        "Updating settings:",
-                        newSettings,
-                        "Current settings:",
-                        settings
-                    );
-                }
-
-                // First update local state immediately for better UX feedback
-                setSettings((currentSettings) => ({
-                    ...currentSettings,
-                    ...newSettings,
-                }));
-
-                // Then update in the database
-                const updatedSettings =
-                    await updateSettingsAction(newSettings);
-
-                if (!updatedSettings) {
-                    throw new Error(
-                        "Failed to update settings in database"
-                    );
-                }
-
+            if (process.env.NODE_ENV !== "production") {
                 console.log(
-                    "Settings updated in database:",
-                    updatedSettings
-                );
-
-                // Only reload the page if we're not on a settings page
-                // This ensures we only reload when changing settings from the manga reader
-                if (
-                    typeof window !== "undefined" &&
-                    !window.location.pathname.startsWith(
-                        "/settings"
-                    )
-                ) {
-                    // We're in the reader - reload to get fresh settings
-                    console.log(
-                        "Reloading page to refresh settings"
-                    );
-                    window.location.reload();
-                } else {
-                    console.log(
-                        "On settings page - not reloading"
-                    );
-                }
-            } catch (err) {
-                console.error(
-                    "Error updating settings:",
-                    err
-                );
-                toast.error("Failed to save settings");
-                setError(
-                    err instanceof Error
-                        ? err
-                        : new Error(String(err))
+                    "Updating settings:",
+                    newSettings
                 );
             }
+
+            try {
+                await mutation.mutateAsync(newSettings);
+            } catch {
+                // Error handling is done in the mutation callbacks
+            }
         },
-        [settings]
+        [mutation]
     );
 
     return {
-        ...settings,
+        ...(settings || defaultSettings),
         updateSettings,
         isLoading,
         error,

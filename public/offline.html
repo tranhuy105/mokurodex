@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MokuroDex - Offline Mode</title>
+    <link rel="stylesheet" href="offline.css">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <!-- Include Tailwind classes used in the app -->
+    <style>
+        /* Basic styling will be loaded from offline.css */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+        .offline-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background:#ff0f0f;
+            color: #262728;
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <div class="container">
+                <div class="logo-container">
+                    <img src="/logo.png" alt="MokuroDex" class="logo" width="40" height="40">
+                    <h1>MokuroDex</h1>
+                </div>
+                <div class="nav-links">
+                    <button id="library-button" class="nav-button active">Library</button>
+                    <button id="manga-button" class="nav-button">Manga</button>
+                    <button id="novels-button" class="nav-button">Light Novels</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="container">
+            <div id="loading" class="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Loading your offline content...</p>
+            </div>
+
+            <div id="welcome-view" class="welcome-view" style="display: none;">
+                <div class="page-header">
+                    <h1 class="gradient-text">Welcome to MokuroDex</h1>
+                    <p>Your manga and novel library - available offline</p>
+                </div>
+                
+                <div id="continue-reading" class="continue-reading" style="display: none;">
+                    <div class="section-header">
+                        <h2>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-clock"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            Continue Reading
+                        </h2>
+                    </div>
+                    <div id="continue-reading-grid" class="content-cards"></div>
+                </div>
+
+                <div class="orange-cta">
+                    <div class="cta-content">
+                        <h2>View Your Entire Collection</h2>
+                        <p>Browse and read your downloaded manga and novels</p>
+                    </div>
+                    <button id="browse-library-btn" class="cta-button">Browse Library</button>
+                </div>
+            </div>
+
+            <div id="no-content" class="message-container" style="display: none;">
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                    <h2>No Offline Content Found</h2>
+                    <p>When you have internet access, download your favorite manga and novels for offline reading.</p>
+                    <div class="empty-actions">
+                        <button id="check-connection" class="action-button primary">Check Connection</button>
+                        <a href="/settings/offline" id="settings-link" class="action-button" style="display: none;">Go to Offline Settings</a>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-library" class="content-grid" style="display: none;"></div>
+            
+            <div id="reader-container" class="reader-container" style="display: none;">
+                <!-- Reader will be dynamically inserted here -->
+            </div>
+        </main>
+
+        <div class="offline-indicator">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+                <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+                <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+                <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+                <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                <line x1="12" y1="20" x2="12.01" y2="20"></line>
+            </svg>
+            <span>Offline</span>
+            <button id="debug-toggle" class="debug-toggle">Debug</button>
+        </div>
+
+        <div id="debug-info" class="debug-info" style="display: none;">
+            <h3>Debug Information</h3>
+            <div id="debug-details" class="debug-details"></div>
+        </div>
+    </div>
+
+    <script src="offline.js"></script>
+</body>
+</html> 
