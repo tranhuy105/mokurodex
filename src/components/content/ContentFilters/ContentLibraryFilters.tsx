@@ -59,22 +59,22 @@ export function ContentLibraryFilters({
         });
 
     const [favorite, setFavorite] = useState<
-        boolean | null
+        boolean | undefined
     >(() => {
         const favoriteParam = searchParams.get("favorite");
         if (favoriteParam === "true") return true;
         if (favoriteParam === "false") return false;
-        return null;
+        return undefined;
     });
 
-    const [isNsfw, setIsNsfw] = useState<boolean | null>(
-        () => {
-            const nsfwParam = searchParams.get("isNsfw");
-            if (nsfwParam === "true") return true;
-            if (nsfwParam === "false") return false;
-            return null; // No NSFW filter selected
-        }
-    );
+    const [isNsfw, setIsNsfw] = useState<
+        boolean | undefined
+    >(() => {
+        const nsfwParam = searchParams.get("isNsfw");
+        if (nsfwParam === "true") return true;
+        if (nsfwParam === "false") return false;
+        return undefined;
+    });
 
     // If embedded, we don't need to control our own visibility
     const [isFilterPanelOpen, setIsFilterPanelOpen] =
@@ -192,7 +192,7 @@ export function ContentLibraryFilters({
         setSelectedCollections([]);
         setSelectedStatuses([]);
         setFavorite(false);
-        setIsNsfw(null);
+        setIsNsfw(undefined);
     };
 
     // Toggle handlers for each filter type
@@ -224,7 +224,9 @@ export function ContentLibraryFilters({
         setFavorite((prev) => !prev);
     };
 
-    const handleNsfwFilter = (value: boolean | null) => {
+    const handleNsfwFilter = (
+        value: boolean | undefined
+    ) => {
         setIsNsfw(value);
     };
 
