@@ -73,6 +73,7 @@ export async function importContent(
                 providedContentId,
                 isCustomPath
             );
+            // Keep revalidatePath for major content import operations
             revalidatePath("/content");
             return result;
         } else if (hasEpubFiles) {
@@ -83,6 +84,7 @@ export async function importContent(
                     providedContentId,
                     isCustomPath
                 );
+            // Keep revalidatePath for major content import operations
             revalidatePath("/content");
             return result;
         } else {
@@ -464,7 +466,6 @@ async function importMangaFromDirectory(
         console.log(
             `Processed ${volumesToProcess.length} volumes for ${directoryPath}`
         );
-        revalidatePath(`/content/${contentId}`);
         return content;
     } catch (error) {
         console.error(
@@ -848,7 +849,6 @@ async function importLightNovelFromDirectory(
         console.log(
             `Processed ${volumesToProcess.length} EPUB volumes for ${directoryPath}`
         );
-        revalidatePath(`/content/${content.id}`);
         return content;
     } catch (error) {
         console.error(
@@ -967,6 +967,7 @@ export async function deleteContent(
             where: { id },
         });
 
+        // Keep revalidatePath for major content operations like deletion
         revalidatePath("/content");
         return true;
     } catch (error) {

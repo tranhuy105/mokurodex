@@ -270,32 +270,26 @@ function ContentGridContent({
                                 <div className="mt-2 flex gap-2">
                                     {content.userData
                                         ?.favorite && (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 w-24 justify-center">
-                                            <Heart className="w-3 h-3 mr-1 fill-red-500 flex-shrink-0" />
-                                            <span className="truncate">
-                                                Favorite
-                                            </span>
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                                            <Heart className="w-3 h-3 mr-1 fill-red-500" />
+                                            Favorite
                                         </span>
                                     )}
                                     {content.userData
                                         ?.isNsfw && (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 w-24 justify-center">
-                                            <EyeOff className="w-3 h-3 mr-1 flex-shrink-0" />
-                                            <span className="truncate">
-                                                NSFW
-                                            </span>
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                                            <EyeOff className="w-3 h-3 mr-1" />
+                                            NSFW
                                         </span>
                                     )}
                                     {content.userData
                                         ?.status && (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 w-24 justify-center">
-                                            <span className="truncate">
-                                                {
-                                                    content
-                                                        .userData
-                                                        .status
-                                                }
-                                            </span>
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                            {
+                                                content
+                                                    .userData
+                                                    .status
+                                            }
                                         </span>
                                     )}
                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">

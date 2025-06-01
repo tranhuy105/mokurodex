@@ -173,7 +173,7 @@ export default function Navbar() {
                     <div className="md:hidden py-2 border-t border-gray-200 dark:border-gray-700">
                         <Link
                             href="/"
-                            className={`block px-3 py-2 rounded-md text-base font-medium ${
+                            className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${
                                 isActive("/")
                                     ? "text-orange-600 dark:text-orange-400 bg-gray-100 dark:bg-gray-700"
                                     : "text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -182,6 +182,7 @@ export default function Navbar() {
                                 setMenuOpen(false)
                             }
                         >
+                            <Home className="h-5 w-5 mr-2" />
                             Home
                         </Link>
                         <Link

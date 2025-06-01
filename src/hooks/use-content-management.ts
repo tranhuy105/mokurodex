@@ -111,6 +111,17 @@ const ensureTagArray = (data: unknown[]): Tag[] => {
 //     return data as Collection[];
 // };
 
+// Define a type for search filters to avoid 'any'
+type SearchFilters = {
+    query?: string;
+    tags?: string[];
+    collections?: string[];
+    status?: string[];
+    favorite?: boolean;
+    isNsfw?: boolean;
+    contentType?: string[];
+};
+
 // ========== Tag Hooks ==========
 
 /**
@@ -151,6 +162,8 @@ export function useCreateTag() {
         onSuccess: (data) => {
             if (data) {
                 toast.success(`Tag "${data.name}" created`);
+
+                // More targeted invalidation
                 queryClient.invalidateQueries({
                     queryKey: managementKeys.tags(),
                 });
@@ -187,8 +200,11 @@ export function useUpdateTag() {
         onSuccess: (data) => {
             if (data) {
                 toast.success(`Tag "${data.name}" updated`);
+
+                // More targeted invalidation
                 queryClient.invalidateQueries({
                     queryKey: managementKeys.tags(),
+                    exact: false,
                 });
                 queryClient.invalidateQueries({
                     queryKey: managementKeys.tag(data.id),
@@ -217,11 +233,33 @@ export function useDeleteTag() {
         onSuccess: (success, id) => {
             if (success) {
                 toast.success("Tag deleted");
+
+                // More targeted invalidation
                 queryClient.invalidateQueries({
                     queryKey: managementKeys.tags(),
                 });
                 queryClient.removeQueries({
                     queryKey: managementKeys.tag(id),
+                });
+
+                // Also invalidate content by tag queries
+                queryClient.invalidateQueries({
+                    queryKey: ["content", "byTag", id],
+                });
+
+                // Don't invalidate all content queries - only those related to tags
+                queryClient.invalidateQueries({
+                    queryKey: ["content", "search"],
+                    predicate: (query) => {
+                        // Only invalidate search queries that might include tag filters
+                        const filters = query
+                            .queryKey[2] as
+                            | SearchFilters
+                            | undefined;
+                        return Boolean(
+                            filters?.tags?.includes(id)
+                        );
+                    },
                 });
             } else {
                 toast.error("Failed to delete tag");
@@ -524,11 +562,14 @@ export function useUpdateUserContentMetadata() {
                 contentId,
                 { contentId, ...data }
             ),
-        onSuccess: (data, { contentId }) => {
+        onSuccess: (
+            data,
+            { contentId, data: updatedData }
+        ) => {
             if (data) {
                 toast.success("Content metadata updated");
 
-                // Invalidate content metadata
+                // Precise invalidation for the specific content
                 queryClient.invalidateQueries({
                     queryKey:
                         managementKeys.contentMetadata(
@@ -536,7 +577,6 @@ export function useUpdateUserContentMetadata() {
                         ),
                 });
 
-                // Invalidate content queries that include this metadata
                 queryClient.invalidateQueries({
                     queryKey: [
                         "content",
@@ -545,15 +585,108 @@ export function useUpdateUserContentMetadata() {
                     ],
                 });
 
-                // Also invalidate tag-related queries if tagIds were updated
-                queryClient.invalidateQueries({
-                    queryKey: managementKeys.tags(),
-                });
+                // Only invalidate tag-related queries if tags were updated
+                if (updatedData.tagIds !== undefined) {
+                    queryClient.invalidateQueries({
+                        queryKey: managementKeys.tags(),
+                        exact: false,
+                    });
 
-                // Invalidate content by tag queries
-                queryClient.invalidateQueries({
-                    queryKey: ["content", "byTag"],
-                });
+                    // Invalidate content by tag queries for affected tags
+                    if (
+                        updatedData.tagIds &&
+                        updatedData.tagIds.length > 0
+                    ) {
+                        updatedData.tagIds.forEach(
+                            (tagId) => {
+                                queryClient.invalidateQueries(
+                                    {
+                                        queryKey: [
+                                            "content",
+                                            "byTag",
+                                            tagId,
+                                        ],
+                                    }
+                                );
+                            }
+                        );
+                    }
+                }
+
+                // Only invalidate collection-related queries if collections were updated
+                if (
+                    updatedData.collectionIds !== undefined
+                ) {
+                    // Invalidate collection queries
+                    queryClient.invalidateQueries({
+                        queryKey:
+                            managementKeys.collections(),
+                        exact: false,
+                    });
+
+                    // Invalidate specific collection queries
+                    if (
+                        updatedData.collectionIds &&
+                        updatedData.collectionIds.length > 0
+                    ) {
+                        updatedData.collectionIds.forEach(
+                            (collectionId) => {
+                                queryClient.invalidateQueries(
+                                    {
+                                        queryKey:
+                                            managementKeys.collection(
+                                                collectionId
+                                            ),
+                                    }
+                                );
+                                queryClient.invalidateQueries(
+                                    {
+                                        queryKey: [
+                                            "content",
+                                            "byCollection",
+                                            collectionId,
+                                        ],
+                                    }
+                                );
+                            }
+                        );
+                    }
+                }
+
+                // Only invalidate status-related search queries if status was updated
+                if (updatedData.status !== undefined) {
+                    queryClient.invalidateQueries({
+                        queryKey: ["content", "search"],
+                        predicate: (query) => {
+                            const filters = query
+                                .queryKey[2] as
+                                | SearchFilters
+                                | undefined;
+                            return Boolean(
+                                filters?.status?.includes(
+                                    updatedData.status as string
+                                )
+                            );
+                        },
+                    });
+                }
+
+                // Only invalidate favorite-related search queries if favorite was updated
+                if (updatedData.favorite !== undefined) {
+                    queryClient.invalidateQueries({
+                        queryKey: ["content", "search"],
+                        predicate: (query) => {
+                            const filters = query
+                                .queryKey[2] as
+                                | SearchFilters
+                                | undefined;
+                            return (
+                                filters?.favorite ===
+                                updatedData.favorite
+                            );
+                        },
+                    });
+                }
             } else {
                 toast.error(
                     "Failed to update content metadata"
@@ -589,20 +722,69 @@ export function useUpdateUserContentMetadataField() {
                 field,
                 value
             ),
-        onSuccess: (data, { contentId, field }) => {
+        onSuccess: (data, { contentId, field, value }) => {
             if (data) {
                 // Only show toast for significant changes
-                if (field === 'favorite') {
-                    const action = data.favorite ? 'added to' : 'removed from';
-                    toast.success(`Content ${action} favorites`);
-                    
-                    // Manually refresh content library to ensure proper display
+                if (field === "favorite") {
+                    const action = data.favorite
+                        ? "added to"
+                        : "removed from";
+                    toast.success(
+                        `Content ${action} favorites`
+                    );
+
+                    // Only refresh content library for favorite changes
                     contentManagementActions.refreshContentLibrary();
+
+                    // Invalidate search queries that filter by favorite
+                    queryClient.invalidateQueries({
+                        queryKey: ["content", "search"],
+                        predicate: (query) => {
+                            const filters = query
+                                .queryKey[2] as
+                                | SearchFilters
+                                | undefined;
+                            return (
+                                filters?.favorite !==
+                                undefined
+                            );
+                        },
+                    });
                 }
-                
+
+                if (field === "status") {
+                    // Invalidate search queries that filter by this status
+                    queryClient.invalidateQueries({
+                        queryKey: ["content", "search"],
+                        predicate: (query) => {
+                            const filters = query
+                                .queryKey[2] as
+                                | SearchFilters
+                                | undefined;
+                            return Boolean(
+                                filters?.status?.includes(
+                                    value as string
+                                )
+                            );
+                        },
+                    });
+                }
+
                 // Minimal invalidation - only invalidate the specific content
                 queryClient.invalidateQueries({
-                    queryKey: ["content", "withUserData", contentId],
+                    queryKey: [
+                        "content",
+                        "withUserData",
+                        contentId,
+                    ],
+                });
+
+                // Also invalidate the metadata query
+                queryClient.invalidateQueries({
+                    queryKey:
+                        managementKeys.contentMetadata(
+                            contentId
+                        ),
                 });
             }
         },
@@ -634,6 +816,7 @@ export function useReadingHistory(contentId: string) {
  * Hook to update reading history
  */
 export function useUpdateReadingHistory() {
+    // No automatic invalidation to avoid re-renders during reading
     return useMutation({
         mutationFn: (data: {
             contentId: string;
@@ -645,7 +828,6 @@ export function useUpdateReadingHistory() {
                 data
             ),
         // No automatic invalidation to avoid re-renders during reading
-        // Call refreshContinueReading manually when needed
     });
 }
 
@@ -659,9 +841,7 @@ export function useRefreshContinueReading() {
         mutationFn:
             contentManagementActions.refreshContinueReading,
         onSuccess: () => {
-            queryClient.invalidateQueries({
-                queryKey: ["content"],
-            });
+            // More targeted invalidation - only invalidate reading history
             queryClient.invalidateQueries({
                 queryKey: managementKeys.history(),
             });

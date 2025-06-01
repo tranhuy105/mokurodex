@@ -12,6 +12,7 @@ import {
     BookOpen,
     Clock,
     EyeOff,
+    Heart,
     Star,
     Tag as TagIcon,
 } from "lucide-react";
@@ -63,15 +64,15 @@ export function ContentCard({ content }: ContentCardProps) {
     const statusColor =
         {
             reading:
-                "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+                "bg-green-100 text-green-800 dark:bg-green-900/70 dark:text-green-100",
             completed:
-                "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+                "bg-blue-100 text-blue-800 dark:bg-blue-900/70 dark:text-blue-100",
             "on-hold":
-                "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+                "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/70 dark:text-yellow-100",
             dropped:
-                "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+                "bg-red-100 text-red-800 dark:bg-red-900/70 dark:text-red-100",
             "plan-to-read":
-                "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+                "bg-purple-100 text-purple-800 dark:bg-purple-900/70 dark:text-purple-100",
         }[status as string] ||
         "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300";
 
@@ -117,6 +118,16 @@ export function ContentCard({ content }: ContentCardProps) {
                         {volumes > 1 && (
                             <div className="px-2 py-1 bg-black/70 text-white text-xs rounded-md">
                                 {volumes} volumes
+                            </div>
+                        )}
+
+                        {/* Favorite badge */}
+                        {favorite && (
+                            <div className="px-2 py-1 bg-red-500/70 text-white text-xs rounded-md flex items-center">
+                                <Heart className="h-3 w-3 mr-1" />
+                                <span className="ml-1">
+                                    Favorite
+                                </span>
                             </div>
                         )}
                     </div>

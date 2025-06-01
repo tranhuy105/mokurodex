@@ -132,6 +132,18 @@ export function useDeleteContent() {
                 queryClient.removeQueries({
                     queryKey: contentKeys.detail(id),
                 });
+
+                queryClient.invalidateQueries({
+                    queryKey: ["volume"],
+                    predicate: (query) => {
+                        const volumeId = query
+                            .queryKey[1] as string;
+                        return Boolean(
+                            volumeId &&
+                                volumeId.startsWith(id)
+                        );
+                    },
+                });
             } else {
                 toast.error("Failed to delete content");
             }
@@ -208,6 +220,14 @@ export function useClearAndRescan() {
             toast.success("All content data cleared");
             queryClient.invalidateQueries({
                 queryKey: contentKeys.all,
+            });
+
+            queryClient.invalidateQueries({
+                queryKey: ["volume"],
+            });
+
+            queryClient.invalidateQueries({
+                queryKey: ["epub"],
             });
         },
         onError: (error) => {

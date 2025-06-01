@@ -79,7 +79,6 @@ export async function createTag(
             },
         });
 
-        revalidatePath("/tags");
         return tag;
     } catch (error) {
         console.error("Error creating tag:", error);
@@ -103,7 +102,6 @@ export async function updateTag(
             data,
         });
 
-        revalidatePath("/tags");
         return tag;
     } catch (error) {
         console.error(`Error updating tag:`, error);
@@ -124,7 +122,6 @@ export async function deleteTag(
             where: { id },
         });
 
-        revalidatePath("/tags");
         return true;
     } catch (error) {
         console.error(`Error deleting tag:`, error);
@@ -217,7 +214,6 @@ export async function createCollection(
             );
         }
 
-        revalidatePath("/collections");
         return collection;
     } catch (error) {
         console.error("Error creating collection:", error);
@@ -272,7 +268,6 @@ export async function updateCollection(
             }
         }
 
-        revalidatePath("/collections");
         return collection;
     } catch (error) {
         console.error(`Error updating collection:`, error);
@@ -293,7 +288,6 @@ export async function deleteCollection(
             where: { id },
         });
 
-        revalidatePath("/collections");
         return true;
     } catch (error) {
         console.error(`Error deleting collection:`, error);
@@ -337,7 +331,6 @@ export async function addContentToCollection(
             });
         }
 
-        revalidatePath(`/collections/${collectionId}`);
         return true;
     } catch (error) {
         console.error(
@@ -373,7 +366,6 @@ export async function removeContentFromCollection(
             data: { updatedAt: new Date() },
         });
 
-        revalidatePath(`/collections/${collectionId}`);
         return true;
     } catch (error) {
         console.error(
@@ -520,7 +512,6 @@ export async function updateUserContentMetadata(
             }
         }
 
-        revalidatePath(`/content/${parsedContentId}`);
         return metadata;
     } catch (error) {
         console.error(
