@@ -2,6 +2,8 @@
  * Consolidated types for content management
  */
 
+import { Page, TextBlock } from "@prisma/client";
+
 // Types from content.ts
 export type ContentType = "manga" | "lightnovel";
 export type VolumeType = "manga" | "epub";
@@ -138,3 +140,12 @@ export interface ExtendedCollection extends Collection {
         content: Content;
     }[];
 }
+
+export interface PageWithTextBlocks extends Page {
+    textBlocks: TextBlock[];
+}
+
+export interface VolumeWithPages extends Volume {
+    pages: PageWithTextBlocks[];
+}
+

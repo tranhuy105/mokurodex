@@ -1,27 +1,30 @@
 "use client";
 
 import { Settings } from "@/hooks/useSettings";
-import {
-    Page,
-    TextBlock as PrismaTextBlock,
-} from "@prisma/client";
+import { PageWithTextBlocks } from "@/types/content";
 import { AlertCircle } from "lucide-react";
-import { memo, useEffect, useRef, useState } from "react";
+import {
+    memo,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import TextBoxes from "./TextBoxes";
 
 interface PageViewProps {
-    page?: Page & {
-        textBlocks?: PrismaTextBlock[];
-    };
+    page?: PageWithTextBlocks;
     settings: Settings;
     pageNumber: number;
     showPageNumber?: boolean;
     priority?: boolean;
     onCropperStateChange?: (isOpen: boolean) => void;
     mode?: "single" | "longStrip";
-    pages?: (Page & {
-        textBlocks?: PrismaTextBlock[];
-    })[];
+    pages?: PageWithTextBlocks[];
+    isLoaded?: (imagePath: string) => boolean;
+    isPrefetching?: (imagePath: string) => boolean;
+    onLoadImage?: () => void;
 }
 
 // Memoize the PageView component to prevent unnecessary re-renders
@@ -31,6 +34,9 @@ const PageView = memo(function PageView({
     pageNumber,
     pages,
     mode = "single",
+    isLoaded,
+    isPrefetching,
+    onLoadImage,
 }: PageViewProps) {
     // For single/double mode, get the page from the pages array if not directly passed
     const page =
@@ -47,23 +53,58 @@ const PageView = memo(function PageView({
     const [imageUrl, setImageUrl] = useState<string>(
         page?.imagePath || ""
     );
+
     const containerRef = useRef<HTMLDivElement>(null);
     const imageRef = useRef<HTMLDivElement>(null);
     const loadTimeoutRef = useRef<NodeJS.Timeout | null>(
         null
     );
     const mountedRef = useRef(true);
-    const [lastWidth, setLastWidth] = useState(0);
-    const [lastHeight, setLastHeight] = useState(0);
+    const dimensionsRef = useRef({ width: 0, height: 0 });
+    const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(
+        null
+    );
+    const resizeObserverRef = useRef<ResizeObserver | null>(
+        null
+    );
+
+    // Optimized image load handler
+    const handleImageLoad = useCallback(() => {
+        if (mountedRef.current) {
+            setIsLoading(false);
+            if (loadTimeoutRef.current) {
+                clearTimeout(loadTimeoutRef.current);
+            }
+            onLoadImage?.();
+        }
+    }, []);
+
+    // Check prefetch status
+    const checkPrefetchStatus = useCallback(() => {
+        if (!page?.imagePath) return false;
+        return isLoaded ? isLoaded(page.imagePath) : false;
+    }, [page?.imagePath, isLoaded]);
+
+    const checkIfPrefetching = useCallback(() => {
+        if (!page?.imagePath) return false;
+        return isPrefetching
+            ? isPrefetching(page.imagePath)
+            : false;
+    }, [page?.imagePath, isPrefetching]);
 
     // Component lifecycle
     useEffect(() => {
         mountedRef.current = true;
-
         return () => {
             mountedRef.current = false;
             if (loadTimeoutRef.current) {
                 clearTimeout(loadTimeoutRef.current);
+            }
+            if (resizeTimeoutRef.current) {
+                clearTimeout(resizeTimeoutRef.current);
+            }
+            if (resizeObserverRef.current) {
+                resizeObserverRef.current.disconnect();
             }
         };
     }, []);
@@ -72,11 +113,17 @@ const PageView = memo(function PageView({
     useEffect(() => {
         if (!page) return;
 
+        // Check if image is already loaded via prefetch
+        if (checkPrefetchStatus()) {
+            setIsLoading(false);
+            setImageError(false);
+            return;
+        }
+
         setIsLoading(true);
         setImageError(false);
         setRetryCount(0);
 
-        // Set a timeout for loading - if image isn't loaded in 5 seconds, retry or mark as error
         if (loadTimeoutRef.current) {
             clearTimeout(loadTimeoutRef.current);
         }
@@ -84,7 +131,6 @@ const PageView = memo(function PageView({
         loadTimeoutRef.current = setTimeout(() => {
             if (mountedRef.current && isLoading) {
                 if (retryCount < 2) {
-                    // Auto-retry
                     retryLoadImage();
                 } else {
                     setImageError(true);
@@ -92,77 +138,85 @@ const PageView = memo(function PageView({
                 }
             }
         }, 5000);
-    }, [page, pageNumber]);
+    }, [page, pageNumber, checkPrefetchStatus]);
 
-    // Detect if on mobile device
+    // Optimize mobile detection with single listener
     useEffect(() => {
         const checkIfMobile = () => {
             if (typeof window !== "undefined") {
-                setIsMobile(window.innerWidth <= 768);
+                const mobile = window.innerWidth <= 768;
+                if (mobile !== isMobile) {
+                    setIsMobile(mobile);
+                }
             }
         };
 
         checkIfMobile();
-        window.addEventListener("resize", checkIfMobile);
+
+        // Throttle resize events
+        let ticking = false;
+        const handleResize = () => {
+            if (!ticking) {
+                requestAnimationFrame(() => {
+                    checkIfMobile();
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        };
+
+        window.addEventListener("resize", handleResize, {
+            passive: true,
+        });
         return () =>
             window.removeEventListener(
                 "resize",
-                checkIfMobile
+                handleResize
             );
-    }, []);
+    }, [isMobile]);
 
     // Update image URL when page changes
     useEffect(() => {
-        if (page?.imagePath) {
+        if (
+            page?.imagePath &&
+            page.imagePath !== imageUrl
+        ) {
             setImageUrl(page.imagePath);
         }
-    }, [page?.imagePath]);
+    }, [page?.imagePath, imageUrl]);
 
-    // Function to retry loading image on error
-    const retryLoadImage = () => {
-        if (!page) return;
+    // Memoized retry function
+    const retryLoadImage = useCallback(() => {
+        if (!page || retryCount >= 3 || !mountedRef.current)
+            return;
 
-        if (retryCount < 3 && mountedRef.current) {
-            setIsLoading(true);
-            setImageError(false);
-            setRetryCount((prev) => prev + 1);
+        setIsLoading(true);
+        setImageError(false);
+        setRetryCount((prev) => prev + 1);
 
-            // Force the browser to reload the image by appending a timestamp
-            if (imageRef.current) {
-                const timestamp = new Date().getTime();
-                const newUrl = `${imageUrl}?t=${timestamp}`;
-                imageRef.current.style.backgroundImage = `url(${newUrl})`;
+        if (imageRef.current) {
+            const timestamp = Date.now();
+            const newUrl = `${imageUrl}?t=${timestamp}`;
+            imageRef.current.style.backgroundImage = `url(${newUrl})`;
 
-                // Create a temporary image element to track loading
-                const img = new Image();
-                img.onload = () => {
-                    if (mountedRef.current) {
-                        setIsLoading(false);
-                    }
-                };
-                img.onerror = () => {
-                    if (mountedRef.current) {
-                        setIsLoading(false);
-                        setImageError(true);
-                    }
-                };
-                img.src = newUrl;
-            }
+            const img = new Image();
+            img.onload = () => {
+                if (mountedRef.current) {
+                    setIsLoading(false);
+                }
+            };
+            img.onerror = () => {
+                if (mountedRef.current) {
+                    setIsLoading(false);
+                    setImageError(true);
+                }
+            };
+            img.src = newUrl;
         }
-    };
+    }, [page, retryCount, imageUrl]);
 
-    // Handle image load
-    const handleImageLoad = () => {
-        if (mountedRef.current) {
-            setIsLoading(false);
-            if (loadTimeoutRef.current) {
-                clearTimeout(loadTimeoutRef.current);
-            }
-        }
-    };
-
-    // Calculate proper dimensions to avoid black bars for wide/double page spreads
-    const getOptimalDimensions = () => {
+    // Memoize optimal dimensions calculation
+    const optimalDimensions = useMemo(() => {
         if (!page)
             return {
                 width: "100%",
@@ -170,10 +224,7 @@ const PageView = memo(function PageView({
                 maxWidth: "100%",
             };
 
-        // Check if this is a wide/double page image
         const isWideImage = page.width > page.height * 1.5;
-
-        // Get actual viewport dimensions only once
         const viewportWidth =
             typeof window !== "undefined"
                 ? window.innerWidth
@@ -184,7 +235,6 @@ const PageView = memo(function PageView({
                 : 800;
 
         if (isMobile) {
-            // Mobile: always use full width
             return {
                 width: "100%",
                 height: `calc(100vw * ${
@@ -193,9 +243,7 @@ const PageView = memo(function PageView({
                 maxWidth: "100%",
             };
         } else {
-            // Desktop: fit to container while keeping aspect ratio
             if (isWideImage) {
-                // For wide images (spreads), calculate dimensions based on viewport constraints
                 const maxWidth = Math.min(
                     page.width,
                     viewportWidth * 0.95
@@ -204,7 +252,6 @@ const PageView = memo(function PageView({
                 const scaledHeight =
                     page.height * scaleFactor;
 
-                // If scaled height exceeds viewport, scale down further
                 if (scaledHeight > viewportHeight) {
                     const heightScaleFactor =
                         viewportHeight / scaledHeight;
@@ -225,7 +272,6 @@ const PageView = memo(function PageView({
                     maxHeight: `${viewportHeight}px`,
                 };
             } else {
-                // For normal images, use original dimensions with maxWidth constraint
                 const maxWidth = Math.min(
                     page.width,
                     viewportWidth * 0.95
@@ -241,29 +287,37 @@ const PageView = memo(function PageView({
                 };
             }
         }
-    };
+    }, [page, isMobile]);
 
-    // Enhanced error handling for image loading
-    // Preload the image
+    // Optimize image preloading with better error handling
     useEffect(() => {
         if (!page?.imagePath) return;
 
-        // Cancel existing timeout if there is one
+        // Skip loading if already loaded by prefetch system
+        if (checkPrefetchStatus()) {
+            setIsLoading(false);
+            return;
+        }
+
         if (loadTimeoutRef.current) {
             clearTimeout(loadTimeoutRef.current);
         }
 
         const img = new Image();
         img.onload = handleImageLoad;
+        img.onerror = () => {
+            if (mountedRef.current) {
+                setIsLoading(false);
+                setImageError(true);
+            }
+        };
 
-        // Add a timestamp to bypass browser cache if this is a retry
         const url =
             retryCount > 0
                 ? `${imageUrl}?t=${Date.now()}`
                 : imageUrl;
         img.src = url;
 
-        // Set a timeout to display error if image doesn't load
         loadTimeoutRef.current = setTimeout(() => {
             if (mountedRef.current && isLoading) {
                 setIsLoading(false);
@@ -275,76 +329,89 @@ const PageView = memo(function PageView({
             if (loadTimeoutRef.current) {
                 clearTimeout(loadTimeoutRef.current);
             }
-            // Cancel image load if component unmounts
             img.onload = null;
             img.onerror = null;
         };
-    }, [imageUrl, retryCount, pageNumber, isLoading, page]);
+    }, [
+        imageUrl,
+        retryCount,
+        pageNumber,
+        handleImageLoad,
+        checkPrefetchStatus,
+    ]);
 
-    // Handle image dimensions changes to update TextBoxes position
+    // Optimize resize handling with proper debouncing and RAF
     useEffect(() => {
+        if (!imageRef.current) return;
+
         const handleResize = () => {
-            // Force a re-render when window size changes to update TextBoxes
-            if (imageRef.current) {
-                const rect =
-                    imageRef.current.getBoundingClientRect();
-                // Only update if dimensions changed significantly (increase threshold)
-                if (
-                    Math.abs(rect.width - lastWidth) > 20 ||
-                    Math.abs(rect.height - lastHeight) > 20
-                ) {
-                    // Use requestAnimationFrame to avoid rapid state changes
-                    requestAnimationFrame(() => {
-                        // Check if component is still mounted and refs are valid
-                        if (
-                            imageRef.current &&
-                            mountedRef.current
-                        ) {
-                            setLastWidth(rect.width);
-                            setLastHeight(rect.height);
-                        }
-                    });
-                }
+            if (!mountedRef.current) return;
+
+            if (resizeTimeoutRef.current) {
+                clearTimeout(resizeTimeoutRef.current);
             }
+
+            resizeTimeoutRef.current = setTimeout(() => {
+                if (
+                    !mountedRef.current ||
+                    !imageRef.current
+                )
+                    return;
+
+                requestAnimationFrame(() => {
+                    if (
+                        !imageRef.current ||
+                        !mountedRef.current
+                    )
+                        return;
+
+                    const rect =
+                        imageRef.current.getBoundingClientRect();
+                    const {
+                        width: lastWidth,
+                        height: lastHeight,
+                    } = dimensionsRef.current;
+
+                    if (
+                        Math.abs(rect.width - lastWidth) >
+                            20 ||
+                        Math.abs(rect.height - lastHeight) >
+                            20
+                    ) {
+                        dimensionsRef.current = {
+                            width: rect.width,
+                            height: rect.height,
+                        };
+                        // Force re-render for TextBoxes positioning
+                        setImageUrl((prev) => prev);
+                    }
+                });
+            }, 100);
         };
 
-        // Debounce resize handler to prevent rapid updates
-        let resizeTimeout: NodeJS.Timeout;
-        const debouncedResize = () => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(handleResize, 100);
-        };
-
-        // Use a single ResizeObserver with proper cleanup
-        let resizeObserver: ResizeObserver | null = null;
-
-        if (
-            typeof ResizeObserver !== "undefined" &&
-            imageRef.current
-        ) {
-            resizeObserver = new ResizeObserver(() => {
-                // Only process if component is still mounted
-                if (mountedRef.current) {
-                    debouncedResize();
-                }
-            });
-
-            resizeObserver.observe(imageRef.current);
+        // Clean up previous observer
+        if (resizeObserverRef.current) {
+            resizeObserverRef.current.disconnect();
         }
 
-        window.addEventListener("resize", debouncedResize);
+        if (typeof ResizeObserver !== "undefined") {
+            resizeObserverRef.current = new ResizeObserver(
+                handleResize
+            );
+            resizeObserverRef.current.observe(
+                imageRef.current
+            );
+        }
 
         return () => {
-            clearTimeout(resizeTimeout);
-            window.removeEventListener(
-                "resize",
-                debouncedResize
-            );
-            if (resizeObserver) {
-                resizeObserver.disconnect();
+            if (resizeTimeoutRef.current) {
+                clearTimeout(resizeTimeoutRef.current);
+            }
+            if (resizeObserverRef.current) {
+                resizeObserverRef.current.disconnect();
             }
         };
-    }, [lastWidth, lastHeight]);
+    }, []);
 
     if (!page) return null;
 
@@ -365,7 +432,9 @@ const PageView = memo(function PageView({
                         <div className="animate-pulse flex flex-col items-center">
                             <div className="h-16 w-16 border-4 border-t-orange-500 border-gray-800 rounded-full animate-spin"></div>
                             <p className="mt-3 text-gray-400 text-sm">
-                                Loading page {pageNumber}...
+                                {checkIfPrefetching()
+                                    ? "Prefetching page..."
+                                    : `Loading page ${pageNumber}...`}
                             </p>
                         </div>
                     </div>
@@ -388,7 +457,7 @@ const PageView = memo(function PageView({
                             ref={imageRef}
                             className="select-none transition-opacity duration-300 relative"
                             style={{
-                                ...getOptimalDimensions(),
+                                ...optimalDimensions,
                                 aspectRatio: `${page.width} / ${page.height}`,
                                 backgroundColor:
                                     settings.darkMode
@@ -400,32 +469,33 @@ const PageView = memo(function PageView({
                                 WebkitUserSelect: "none",
                                 minHeight: isMobile
                                     ? "50px"
-                                    : "auto", // Ensure a minimum height on mobile
+                                    : "auto",
                             }}
                         >
-                            {/* Use img element instead of background-image for better format support */}
                             <img
                                 src={imageUrl}
                                 alt={`Page ${pageNumber}`}
                                 className="w-full h-full object-contain"
                                 style={{
-                                    filter: settings.invertColors
-                                        ? "invert(1)"
-                                        : "none",
                                     transform:
-                                        "translateZ(0)", // Hardware acceleration
-                                    willChange: "transform", // Hint for browser to optimize
-                                    imageRendering: "auto", // Improve image quality
+                                        "translateZ(0)",
+                                    willChange: "transform",
+                                    imageRendering: "auto",
                                     transformStyle:
-                                        "preserve-3d", // Prevent flickering
+                                        "preserve-3d",
                                 }}
                                 onLoad={handleImageLoad}
                                 onError={() => {
                                     console.error(
                                         `Image failed to load: ${imageUrl}`
                                     );
-                                    // This will trigger the image error effect which has fallback handling
                                 }}
+                                loading={
+                                    mode === "longStrip"
+                                        ? "lazy"
+                                        : "eager"
+                                }
+                                decoding="async"
                             />
                         </div>
 
@@ -478,5 +548,8 @@ const PageView = memo(function PageView({
         </div>
     );
 });
+
+// Add display name for better debugging
+PageView.displayName = "PageView";
 
 export default PageView;

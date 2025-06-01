@@ -1,15 +1,13 @@
 "use client";
 
 import { OfflineManager } from "@/components/pwa/OfflineManager";
-import {
-    useUpdateReadingHistory,
-    useVolumePages,
-} from "@/hooks/use-manga-reader";
+import { useUpdateReadingHistory } from "@/hooks/use-manga-reader";
 import { useSettings } from "@/hooks/useSettings";
 import {
     MangaReaderProps,
     navigateToPage,
 } from "@/lib/reader-utils";
+import { PageWithTextBlocks } from "@/types/content";
 import { Volume } from "@prisma/client";
 import {
     useCallback,
@@ -27,6 +25,7 @@ export default function MangaReaderContainer({
     mangaId,
     volume: initialVolume,
     volumes,
+    pages: initialPages,
     initialPage,
 }: MangaReaderProps) {
     // State to track the current volume and pages
@@ -36,13 +35,14 @@ export default function MangaReaderContainer({
         useState<number>(initialPage);
     const [isLoading, setIsLoading] =
         useState<boolean>(false);
+    const [pages, setPages] = useState<
+        PageWithTextBlocks[]
+    >(initialPages || []);
+    const [isPagesLoading, setIsPagesLoading] =
+        useState(false);
 
     // Settings for reading mode and saving position
     const { autoSavePosition } = useSettings();
-
-    // Use React Query hook to fetch pages for the current volume
-    const { data: pages = [], isLoading: isPagesLoading } =
-        useVolumePages(currentVolume.id);
 
     // Use React Query hook for updating reading history
     const { mutate: updateReadingHistory } =
@@ -60,66 +60,41 @@ export default function MangaReaderContainer({
     // Track if this is the first render to avoid double URL updates on mount
     const isFirstRender = useRef(true);
 
-    // Listen for browser history navigation (back/forward buttons)
+    // Fetch all pages for the current volume when volume changes (if not the initial volume)
     useEffect(() => {
-        function handlePopState() {
-            // Parse the current URL to get the page
-            const pathParts =
-                window.location.pathname.split("/");
-            if (
-                pathParts.length >= 6 &&
-                pathParts[1] === "reader" &&
-                pathParts[2] === "manga"
-            ) {
-                const newMangaId = decodeURIComponent(
-                    pathParts[3]
-                );
-                const newVolumeNumber = parseInt(
-                    pathParts[4],
-                    10
-                );
-                const newPageNum = parseInt(
-                    pathParts[5],
-                    10
-                );
+        // Skip fetching for initial volume since we already have the pages
+        if (
+            currentVolume.id === initialVolume.id &&
+            initialPages?.length > 0
+        ) {
+            return;
+        }
 
-                if (newMangaId === mangaId) {
-                    // Find volume by volume number
-                    const newVolume = volumes.find(
-                        (v) =>
-                            v.volumeNumber ===
-                            newVolumeNumber
+        async function fetchPages() {
+            setIsPagesLoading(true);
+            try {
+                const response = await fetch(
+                    `/api/pages?volumeId=${currentVolume.id}`
+                );
+                if (!response.ok) {
+                    throw new Error(
+                        "Failed to fetch pages"
                     );
-
-                    if (newVolume) {
-                        if (
-                            newVolume.id ===
-                            currentVolume.id
-                        ) {
-                            // Only page changed, update local state
-                            if (
-                                !isNaN(newPageNum) &&
-                                newPageNum >= 1
-                            ) {
-                                setCurrentPage(newPageNum);
-                            }
-                        } else {
-                            // Volume changed, update volume state
-                            setCurrentVolume(newVolume);
-                            setCurrentPage(newPageNum || 1);
-                        }
-                    }
                 }
+                const data = await response.json();
+                setPages(data);
+            } catch (error) {
+                console.error(
+                    "Error fetching pages:",
+                    error
+                );
+            } finally {
+                setIsPagesLoading(false);
             }
         }
 
-        window.addEventListener("popstate", handlePopState);
-        return () =>
-            window.removeEventListener(
-                "popstate",
-                handlePopState
-            );
-    }, [mangaId, currentVolume.id, volumes]);
+        fetchPages();
+    }, [currentVolume.id, initialVolume.id, initialPages]);
 
     // Save reading position to database - simplified version
     const saveReadingPosition = useCallback(
@@ -248,9 +223,9 @@ export default function MangaReaderContainer({
         },
         [
             currentVolume.id,
+            volumes,
             mangaId,
             saveReadingPosition,
-            volumes,
         ]
     );
 

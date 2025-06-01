@@ -1,6 +1,7 @@
 "use client";
 
 import { useReaderControls, useSettings } from "@/hooks";
+import { usePrefetchImages } from "@/hooks/usePrefetchImages";
 import { updateLastCard } from "@/lib/anki-connect";
 import {
     ChevronUp,
@@ -15,7 +16,8 @@ import ImageCropper from "./ImageCropper";
 import SettingsSidebar from "./SettingsSidebar";
 
 // Import reading modes components
-import { Page, Volume } from "@prisma/client";
+import { PageWithTextBlocks } from "@/types/content";
+import { Volume } from "@prisma/client";
 import ProgressBar from "./ProgressBar";
 import {
     DoublePageMode,
@@ -33,7 +35,7 @@ type DoublePageData = {
 interface Props {
     manga: string;
     volume: Volume;
-    pages: Page[];
+    pages: PageWithTextBlocks[];
     volumes: Volume[];
     initialPage: number;
     onPageChange: (page: number) => void;
@@ -81,6 +83,32 @@ export default function MangaReader({
 
     // Memoize the page data to prevent unnecessary re-renders
     const memoizedPages = useMemo(() => pages, [pages]);
+
+    const {
+        loadedImages,
+        prefetchingImages,
+        failedImages,
+        isLoaded,
+        isPrefetching,
+    } = usePrefetchImages(
+        memoizedPages,
+        initialPage,
+        15, // Increased prefetch distance like MangaDex
+        6 // Batch size for loading
+    );
+
+    console.log("Prefetch Status:", {
+        loaded: loadedImages.size,
+        prefetching: prefetchingImages.size,
+        failed: failedImages.size,
+        currentPage: initialPage,
+        currentPageLoaded: isLoaded(
+            memoizedPages[initialPage - 1]?.imagePath || ""
+        ),
+        currentPagePrefetching: isPrefetching(
+            memoizedPages[initialPage - 1]?.imagePath || ""
+        ),
+    });
 
     // Scroll to top function
     const scrollToTop = () => {
@@ -201,6 +229,8 @@ export default function MangaReader({
             manga,
             volumeId: volume.volumeUuid,
             showControls,
+            isLoaded,
+            isPrefetching,
         };
 
         switch (settings.readingMode) {
@@ -304,6 +334,10 @@ export default function MangaReader({
                 <ProgressBar
                     currentPage={initialPage}
                     totalPages={actualPageCount}
+                    pages={memoizedPages}
+                    mode={settings.readingMode}
+                    loadedPages={loadedImages}
+                    prefetchedPages={prefetchingImages}
                 />
             </div>
 

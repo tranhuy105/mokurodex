@@ -1,7 +1,7 @@
 "use client";
 
 import { Settings } from "@/hooks/useSettings";
-import { Page } from "@prisma/client";
+import { PageWithTextBlocks } from "@/types/content";
 import {
     ArrowLeft,
     ArrowRight,
@@ -31,7 +31,7 @@ interface RightToLeftChangedEvent extends CustomEvent {
 }
 
 interface ReadingModeProps {
-    pages: Page[];
+    pages: PageWithTextBlocks[];
     currentPage: number;
     settings: Settings;
     initialPage: number;
@@ -39,6 +39,8 @@ interface ReadingModeProps {
     manga: string;
     volumeId: string;
     showControls?: boolean;
+    isLoaded?: (imagePath: string) => boolean;
+    isPrefetching?: (imagePath: string) => boolean;
 }
 
 // Single Page Mode Component
@@ -48,10 +50,12 @@ const SinglePageMode = ({
     settings,
     onPageChange,
     showControls = false,
+    isLoaded,
+    isPrefetching,
 }: ReadingModeProps) => {
     // Use direct ref access to avoid unnecessary re-renders
     const preloadedPagesRef = useRef<{
-        [key: number]: Page;
+        [key: number]: PageWithTextBlocks;
     }>({});
     const [isCropperOpen, setIsCropperOpen] =
         useState(false);
@@ -60,9 +64,7 @@ const SinglePageMode = ({
     const transformRef = useRef<ReactZoomPanPinchRef>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const isMountedRef = useRef(true);
-    // Track if TextBoxes should be visible
-    const [showTextBoxes, setShowTextBoxes] =
-        useState(true);
+    const [isMounted, setIsMounted] = useState(false);
 
     // Memoize the current page to prevent unnecessary re-renders
     const page = useMemo(
@@ -70,14 +72,19 @@ const SinglePageMode = ({
         [pages, currentPage]
     );
 
-    // Preload adjacent pages - extracted to a reusable function
+    const handleResetTransform = () => {
+        if (transformRef.current) {
+            transformRef.current.resetTransform();
+        }
+    };
+
+    // Preload adjacent pages - can be kept for backward compatibility
     const preloadAdjacentPages = useCallback(() => {
         const pagesToPreload = [
             currentPage - 1,
             currentPage,
             currentPage + 1,
         ];
-        console.log("Preloading pages:", pagesToPreload);
 
         pagesToPreload.forEach((pageNum) => {
             if (
@@ -98,6 +105,8 @@ const SinglePageMode = ({
         // Preload current and adjacent pages immediately on mount
         preloadAdjacentPages();
 
+        // Set isMounted to true after hydration
+        setIsMounted(true);
         return () => {
             isMountedRef.current = false;
         };
@@ -136,7 +145,7 @@ const SinglePageMode = ({
         []
     );
 
-    // Navigation functions - optimized with proper dependencies
+    // Memoize navigation handlers to prevent unnecessary re-renders
     const handlePrevPage = useCallback(() => {
         if (
             currentPage > 1 &&
@@ -231,23 +240,6 @@ const SinglePageMode = ({
         preloadAdjacentPages();
     }, [currentPage, preloadAdjacentPages]);
 
-    // Reset zoom when page changes
-    useEffect(() => {
-        const resetZoom = async () => {
-            if (transformRef.current) {
-                transformRef.current.resetTransform();
-
-                // Reset zoom state and ensure TextBoxes are visible
-                if (isMountedRef.current) {
-                    setIsZoomed(false);
-                    setShowTextBoxes(true);
-                }
-            }
-        };
-
-        resetZoom();
-    }, [currentPage, page]);
-
     // Prevent wheel scrolling on the container when zoomed - optimized event handling
     useEffect(() => {
         const container = containerRef.current;
@@ -308,6 +300,37 @@ const SinglePageMode = ({
         };
     }, [isZoomed]);
 
+    // Memoize the PageView component to prevent unnecessary re-renders
+    const pageViewComponent = useMemo(() => {
+        if (!page) return null;
+        return (
+            <PageView
+                key={`${currentPage}-${settings.rightToLeft}`}
+                pages={pages}
+                settings={{
+                    ...settings,
+                    showTooltips: settings.showTooltips,
+                }}
+                pageNumber={currentPage}
+                priority={true}
+                onCropperStateChange={
+                    handleCropperStateChange
+                }
+                mode="single"
+                isLoaded={isLoaded}
+                isPrefetching={isPrefetching}
+                onLoadImage={handleResetTransform}
+            />
+        );
+    }, [
+        currentPage,
+        settings,
+        pages,
+        handleCropperStateChange,
+        isLoaded,
+        isPrefetching,
+    ]);
+
     // Early return if page is not available
     if (!page) return null;
 
@@ -324,11 +347,6 @@ const SinglePageMode = ({
         }
     };
 
-    const handleResetTransform = () => {
-        if (transformRef.current) {
-            transformRef.current.resetTransform();
-        }
-    };
     return (
         <div
             ref={containerRef}
@@ -353,23 +371,13 @@ const SinglePageMode = ({
                 onTransformed={(ref) => {
                     if (isMountedRef.current) {
                         const newScale = ref.state.scale;
-                        const wasZoomed = isZoomed;
-                        setIsZoomed(newScale > 1.01);
-                        setScale(newScale);
-
-                        // Toggle TextBoxes visibility based on zoom state
-                        if (newScale > 1.01 && !wasZoomed) {
-                            setShowTextBoxes(false);
-                        } else if (
-                            newScale <= 1.01 &&
-                            wasZoomed
+                        // Only update zoom state when there's an actual change
+                        if (
+                            Math.abs(newScale - scale) >
+                            0.01
                         ) {
-                            // Small delay to let transform complete before showing TextBoxes
-                            setTimeout(() => {
-                                if (isMountedRef.current) {
-                                    setShowTextBoxes(true);
-                                }
-                            }, 300);
+                            setIsZoomed(newScale > 1.01);
+                            setScale(newScale);
                         }
                     }
                 }}
@@ -400,24 +408,7 @@ const SinglePageMode = ({
                         >
                             {page && (
                                 <div>
-                                    <PageView
-                                        key={`${currentPage}-${settings.rightToLeft}`}
-                                        pages={pages}
-                                        settings={{
-                                            ...settings,
-                                            showTooltips:
-                                                showTextBoxes &&
-                                                settings.showTooltips,
-                                        }}
-                                        pageNumber={
-                                            currentPage
-                                        }
-                                        priority={true}
-                                        onCropperStateChange={
-                                            handleCropperStateChange
-                                        }
-                                        mode="single"
-                                    />
+                                    {pageViewComponent}
                                 </div>
                             )}
                         </TransformComponent>
@@ -455,7 +446,7 @@ const SinglePageMode = ({
             </TransformWrapper>
 
             {/* Navigation buttons - show only when controls are visible and not zoomed */}
-            {showControls && !isZoomed && (
+            {showControls && !isZoomed && isMounted && (
                 <>
                     {/* Previous Page Button - direction depends on reading mode */}
                     <button

@@ -1,6 +1,7 @@
 import MangaReaderContainer from "@/components/reader/manga/MangaReaderContainer";
 import { MangaReaderSkeleton } from "@/components/reader/manga/MangaReaderSkeleton";
 import { decodeUrlParam } from "@/lib/path-utils";
+import { getVolumePages } from "@/server/actions/content";
 import { getContentWithVolumes } from "@/server/actions/manga-reader";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -59,6 +60,11 @@ export default async function MangaReaderPage({
             return notFound();
         }
 
+        // Fetch all pages for the current volume
+        const pages = await getVolumePages({
+            id: currentVolume.id,
+        });
+
         // Render the manga reader content component with initial data
         return (
             <Suspense fallback={<MangaReaderSkeleton />}>
@@ -66,10 +72,9 @@ export default async function MangaReaderPage({
                     mangaId={contentId}
                     volume={currentVolume}
                     volumes={content.contentVolumes}
-                    //@ts-expect-error: deo mapping
-                    pages={currentVolume.pages}
+                    pages={pages}
                     initialPage={pageNumber}
-                    initialTimestamp={Date.now()}
+                    initialTimestamp={0}
                 />
             </Suspense>
         );

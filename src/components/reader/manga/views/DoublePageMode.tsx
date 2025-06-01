@@ -1,7 +1,7 @@
 "use client";
 
 import { Settings } from "@/hooks/useSettings";
-import { Page } from "@prisma/client";
+import { PageWithTextBlocks } from "@/types/content";
 import {
     ArrowLeft,
     ArrowRight,
@@ -12,10 +12,12 @@ import {
 import {
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState,
 } from "react";
 import {
+    ReactZoomPanPinchRef,
     TransformComponent,
     TransformWrapper,
 } from "react-zoom-pan-pinch";
@@ -29,12 +31,14 @@ interface RightToLeftChangedEvent extends CustomEvent {
 }
 
 interface ReadingModeProps {
-    pages: Page[];
+    pages: PageWithTextBlocks[];
     currentPage: number;
     settings: Settings;
     initialPage: number;
     onPageChange?: (page: number) => void;
     showControls?: boolean;
+    isLoaded?: (imagePath: string) => boolean;
+    isPrefetching?: (imagePath: string) => boolean;
 }
 
 const DoublePageMode = ({
@@ -43,6 +47,8 @@ const DoublePageMode = ({
     settings,
     onPageChange,
     showControls = false,
+    isLoaded,
+    isPrefetching,
 }: ReadingModeProps) => {
     // Ensure we're on an odd page for proper double page display
     const adjustedCurrentPage =
@@ -58,30 +64,26 @@ const DoublePageMode = ({
     // Replace state with refs where possible
     const [isReady, setIsReady] = useState(false);
     const preloadedPagesRef = useRef<{
-        [key: number]: Page;
+        [key: number]: PageWithTextBlocks;
     }>({});
     const [isCropperOpen, setIsCropperOpen] =
         useState(false);
     const [isZoomed, setIsZoomed] = useState(false);
     const [scale, setScale] = useState(1);
-    const transformRef = useRef(null);
+    const transformRef = useRef<ReactZoomPanPinchRef>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    // Use a ref instead of state for force rerender
-    const forceRerenderRef = useRef(0);
+    // Use a state variable for RTL changes instead of refs
+    const [rtlVersion, setRtlVersion] = useState(0);
     const isMountedRef = useRef(true);
-    // Track if TextBoxes should be visible
-    const [showTextBoxes, setShowTextBoxes] =
-        useState(true);
-
-    // Create a state with update function stored in ref to avoid linter errors
-    const [, setDummy] = useState({});
-    const forceUpdateRef = useRef(() => {
-        setDummy(Object.assign({}));
-    });
+    const [isMounted, setIsMounted] = useState(false);
 
     // Cleanup on unmount
     useEffect(() => {
         isMountedRef.current = true;
+
+        // Set isMounted to true after hydration
+        setIsMounted(true);
+
         return () => {
             isMountedRef.current = false;
         };
@@ -95,11 +97,9 @@ const DoublePageMode = ({
                 "Right-to-left changed event received in DoublePageMode, new value:",
                 rtlEvent.detail?.rightToLeft
             );
-            // Increment ref counter to force rerender without state update
-            forceRerenderRef.current++;
-            // Force re-render using an empty object - only when mounted
+            // Use state update instead of ref and force update
             if (isMountedRef.current) {
-                forceUpdateRef.current();
+                setRtlVersion((prev) => prev + 1);
             }
         };
 
@@ -196,27 +196,17 @@ const DoublePageMode = ({
         }
     }, [currentPage, onPageChange, isReady]);
 
-    // Reset zoom when page changes
+    // Reset zoom when page changes - optimize to prevent unnecessary state updates
     useEffect(() => {
-        const resetZoom = async () => {
-            // @ts-expect-error - transformRef.current might be typed incorrectly
-            if (
-                transformRef.current &&
-                transformRef.current.resetTransform
-            ) {
-                // @ts-expect-error - Method is available but not properly typed in the library
-                transformRef.current.resetTransform();
-                // Reset zoom state
-                if (isMountedRef.current) {
-                    setIsZoomed(false);
-                    setScale(1);
-                    setShowTextBoxes(true);
-                }
+        if (transformRef.current) {
+            // Prevent unnecessary resets if scale is already 1
+            if (scale !== 1) {
+                // Call resetTransform without async wrapper to avoid race conditions
+                transformRef.current.resetTransform(0); // Use 0ms duration for immediate reset
             }
-        };
-
-        resetZoom();
-    }, [adjustedCurrentPage, leftPage, rightPage]);
+            // State updates will be handled by onTransformed callback
+        }
+    }, [adjustedCurrentPage, leftPage, rightPage, scale]);
 
     // Prevent wheel scrolling on the container when zoomed - more comprehensive approach
     useEffect(() => {
@@ -292,6 +282,63 @@ const DoublePageMode = ({
         };
     }, [isZoomed]);
 
+    // Memoize page views to prevent unnecessary re-renders
+    const leftPageView = useMemo(() => {
+        if (!leftPage) return null;
+        return (
+            <PageView
+                key={`left-${currentPage}-${settings.rightToLeft}-${rtlVersion}`}
+                pages={pages}
+                pageNumber={leftPage.pageNumber}
+                settings={{
+                    ...settings,
+                    showTooltips: settings.showTooltips,
+                }}
+                priority={true}
+                onCropperStateChange={setIsCropperOpen}
+                mode="single"
+                isLoaded={isLoaded}
+                isPrefetching={isPrefetching}
+            />
+        );
+    }, [
+        leftPage,
+        currentPage,
+        settings,
+        pages,
+        rtlVersion,
+        isLoaded,
+        isPrefetching,
+    ]);
+
+    const rightPageView = useMemo(() => {
+        if (!rightPage) return null;
+        return (
+            <PageView
+                key={`right-${currentPage}-${settings.rightToLeft}-${rtlVersion}`}
+                pages={pages}
+                pageNumber={rightPage.pageNumber}
+                settings={{
+                    ...settings,
+                    showTooltips: settings.showTooltips,
+                }}
+                priority={true}
+                onCropperStateChange={setIsCropperOpen}
+                mode="single"
+                isLoaded={isLoaded}
+                isPrefetching={isPrefetching}
+            />
+        );
+    }, [
+        rightPage,
+        currentPage,
+        settings,
+        pages,
+        rtlVersion,
+        isLoaded,
+        isPrefetching,
+    ]);
+
     return (
         <div
             ref={containerRef}
@@ -316,23 +363,13 @@ const DoublePageMode = ({
                 onTransformed={(ref) => {
                     if (isMountedRef.current) {
                         const newScale = ref.state.scale;
-                        const wasZoomed = isZoomed;
-                        setIsZoomed(newScale > 1.01);
-                        setScale(newScale);
-
-                        // Toggle TextBoxes visibility based on zoom state
-                        if (newScale > 1.01 && !wasZoomed) {
-                            setShowTextBoxes(false);
-                        } else if (
-                            newScale <= 1.01 &&
-                            wasZoomed
+                        // Only update zoom state when there's an actual change
+                        if (
+                            Math.abs(newScale - scale) >
+                            0.01
                         ) {
-                            // Small delay to let transform complete before showing TextBoxes
-                            setTimeout(() => {
-                                if (isMountedRef.current) {
-                                    setShowTextBoxes(true);
-                                }
-                            }, 300);
+                            setIsZoomed(newScale > 1.01);
+                            setScale(newScale);
                         }
                     }
                 }}
@@ -371,54 +408,16 @@ const DoublePageMode = ({
                                     <>
                                         {rightPage && (
                                             <div className="relative h-full">
-                                                <PageView
-                                                    key={`right-${currentPage}-${settings.rightToLeft}`}
-                                                    pages={
-                                                        pages
-                                                    }
-                                                    pageNumber={
-                                                        rightPage.pageNumber
-                                                    }
-                                                    settings={{
-                                                        ...settings,
-                                                        showTooltips:
-                                                            showTextBoxes &&
-                                                            settings.showTooltips,
-                                                    }}
-                                                    priority={
-                                                        true
-                                                    }
-                                                    onCropperStateChange={
-                                                        setIsCropperOpen
-                                                    }
-                                                    mode="single"
-                                                />
+                                                {
+                                                    rightPageView
+                                                }
                                             </div>
                                         )}
                                         {leftPage && (
                                             <div className="relative h-full">
-                                                <PageView
-                                                    key={`left-${currentPage}-${settings.rightToLeft}`}
-                                                    pages={
-                                                        pages
-                                                    }
-                                                    pageNumber={
-                                                        leftPage.pageNumber
-                                                    }
-                                                    settings={{
-                                                        ...settings,
-                                                        showTooltips:
-                                                            showTextBoxes &&
-                                                            settings.showTooltips,
-                                                    }}
-                                                    priority={
-                                                        true
-                                                    }
-                                                    onCropperStateChange={
-                                                        setIsCropperOpen
-                                                    }
-                                                    mode="single"
-                                                />
+                                                {
+                                                    leftPageView
+                                                }
                                             </div>
                                         )}
                                     </>
@@ -427,54 +426,16 @@ const DoublePageMode = ({
                                     <>
                                         {leftPage && (
                                             <div className="relative h-full">
-                                                <PageView
-                                                    key={`left-${currentPage}-${settings.rightToLeft}`}
-                                                    pages={
-                                                        pages
-                                                    }
-                                                    pageNumber={
-                                                        leftPage.pageNumber
-                                                    }
-                                                    settings={{
-                                                        ...settings,
-                                                        showTooltips:
-                                                            showTextBoxes &&
-                                                            settings.showTooltips,
-                                                    }}
-                                                    priority={
-                                                        true
-                                                    }
-                                                    onCropperStateChange={
-                                                        setIsCropperOpen
-                                                    }
-                                                    mode="single"
-                                                />
+                                                {
+                                                    leftPageView
+                                                }
                                             </div>
                                         )}
                                         {rightPage && (
                                             <div className="relative h-full">
-                                                <PageView
-                                                    key={`right-${currentPage}-${settings.rightToLeft}`}
-                                                    pages={
-                                                        pages
-                                                    }
-                                                    pageNumber={
-                                                        rightPage.pageNumber
-                                                    }
-                                                    settings={{
-                                                        ...settings,
-                                                        showTooltips:
-                                                            showTextBoxes &&
-                                                            settings.showTooltips,
-                                                    }}
-                                                    priority={
-                                                        true
-                                                    }
-                                                    onCropperStateChange={
-                                                        setIsCropperOpen
-                                                    }
-                                                    mode="single"
-                                                />
+                                                {
+                                                    rightPageView
+                                                }
                                             </div>
                                         )}
                                     </>
@@ -521,7 +482,7 @@ const DoublePageMode = ({
             {/* Navigation buttons for double page mode */}
             <div
                 className={`fixed inset-x-0 top-1/2 flex items-center justify-between pointer-events-none transition-opacity duration-300 z-50 -translate-y-1/2 ${
-                    showControls
+                    showControls && isMounted
                         ? "opacity-100"
                         : "opacity-0"
                 }`}
