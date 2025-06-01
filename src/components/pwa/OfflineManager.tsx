@@ -777,24 +777,24 @@ export function OfflineManager({
     }
 
     return (
-        <div className="fixed bottom-4 left-4 z-50">
+        <div className="fixed top-4 right-4 z-50">
             {isDownloaded ? (
                 // Downloaded state - show remove option
                 <div className="relative group">
                     <button
                         onClick={removeDownload}
-                        className="flex items-center justify-center w-12 h-12 bg-slate-900/95 hover:bg-red-600/90 border border-slate-700/50 hover:border-red-500/50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 backdrop-blur-sm group"
+                        className="flex items-center justify-center w-8 h-8 bg-slate-900/95 hover:bg-red-600/90 border border-slate-700/50 hover:border-red-500/50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 backdrop-blur-sm group"
                         title="Remove from offline storage"
                     >
                         <Trash2
-                            size={18}
+                            size={14}
                             className="text-slate-300 group-hover:text-white transition-colors"
                         />
                     </button>
                     {/* Downloaded indicator */}
                     <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-md border-2 border-slate-900">
                         <CheckCircle
-                            size={12}
+                            size={14}
                             className="text-white"
                         />
                     </div>
@@ -809,9 +809,9 @@ export function OfflineManager({
                         </span>
                     </div>
                     {/* Button - same size as others */}
-                    <div className="flex items-center justify-center w-12 h-12 bg-slate-900/95 border border-blue-500/50 rounded-xl shadow-lg backdrop-blur-sm">
+                    <div className="flex items-center justify-center w-8 h-8 bg-slate-900/95 border border-blue-500/50 rounded-xl shadow-lg backdrop-blur-sm">
                         <Loader2
-                            size={18}
+                            size={14}
                             className="text-blue-400 animate-spin"
                         />
                     </div>
@@ -832,11 +832,11 @@ export function OfflineManager({
                 // Download button
                 <button
                     onClick={downloadContent}
-                    className="flex items-center justify-center w-12 h-12 bg-slate-900/95 hover:bg-blue-600/90 border border-slate-700/50 hover:border-blue-500/50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 backdrop-blur-sm group"
+                    className="flex items-center justify-center w-8 h-8 bg-slate-900/95 hover:bg-blue-600/90 border border-slate-700/50 hover:border-blue-500/50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 backdrop-blur-sm group"
                     title="Download for offline reading"
                 >
                     <Download
-                        size={18}
+                        size={14}
                         className="text-slate-300 group-hover:text-white transition-colors"
                     />
                 </button>

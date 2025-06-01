@@ -286,24 +286,19 @@ export default function MangaReaderContainer({
                 />
             </div>
 
-            <div className="sticky bottom-0 left-0 right-0 p-4 bg-none flex justify-center z-10">
-                <OfflineManager
-                    contentId={mangaId}
-                    contentTitle={
-                        currentVolume.volumeTitle || "Manga"
-                    }
-                    contentType="manga"
-                    volumeId={currentVolume.id}
-                    volumeNumber={
-                        currentVolume.volumeNumber
-                    }
-                    volumeTitle={currentVolume.volumeTitle}
-                    coverImage={
-                        currentVolume.coverImage ||
-                        undefined
-                    }
-                />
-            </div>
+            <OfflineManager
+                contentId={mangaId}
+                contentTitle={
+                    currentVolume.volumeTitle || "Manga"
+                }
+                contentType="manga"
+                volumeId={currentVolume.id}
+                volumeNumber={currentVolume.volumeNumber}
+                volumeTitle={currentVolume.volumeTitle}
+                coverImage={
+                    currentVolume.coverImage || undefined
+                }
+            />
         </div>
     );
 }

@@ -197,21 +197,17 @@ export default function EpubReaderContainer({
                     initialPosition={initialPosition}
                 />
             </div>
-            <div className="sticky bottom-0 left-0 right-0 p-4  flex justify-center z-10">
-                <OfflineManager
-                    contentId={contentId}
-                    contentTitle={
-                        volume.volumeTitle || "Light Novel"
-                    }
-                    contentType="lightnovel"
-                    volumeId={volume.id}
-                    volumeNumber={volume.volumeNumber}
-                    volumeTitle={volume.volumeTitle}
-                    coverImage={
-                        volume.coverImage || undefined
-                    }
-                />
-            </div>
+            <OfflineManager
+                contentId={contentId}
+                contentTitle={
+                    volume.volumeTitle || "Light Novel"
+                }
+                contentType="lightnovel"
+                volumeId={volume.id}
+                volumeNumber={volume.volumeNumber}
+                volumeTitle={volume.volumeTitle}
+                coverImage={volume.coverImage || undefined}
+            />
         </div>
     );
 }
