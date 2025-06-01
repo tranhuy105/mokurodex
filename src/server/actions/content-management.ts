@@ -531,6 +531,57 @@ export async function updateUserContentMetadata(
     }
 }
 
+/**
+ * Update specific user metadata field for a content
+ * This is a more efficient method for updating single fields
+ */
+export async function updateUserContentMetadataField(
+    contentId: string,
+    field: string,
+    value: number | string | boolean | null
+) {
+    try {
+        const { id: parsedContentId } = IdSchema.parse({
+            id: contentId,
+        });
+        
+        // Get existing metadata
+        const existingMetadata =
+            await db.userContentMetadata.findUnique({
+                where: { contentId: parsedContentId },
+            });
+            
+        if (!existingMetadata) {
+            // Create basic metadata if it doesn't exist
+            return await db.userContentMetadata.create({
+                data: {
+                    id: nanoid(),
+                    contentId: parsedContentId,
+                    [field]: value,
+                    updatedAt: new Date(),
+                },
+            });
+        } else {
+            // Update only the specific field
+            return await db.userContentMetadata.update({
+                where: { id: existingMetadata.id },
+                data: {
+                    [field]: value,
+                    updatedAt: new Date(),
+                },
+            });
+        }
+        
+        // Note: We're not revalidating the path here to avoid excessive rerenders
+    } catch (error) {
+        console.error(
+            `Error updating user content metadata field:`,
+            error
+        );
+        return null;
+    }
+}
+
 // ========== Reading History Operations ==========
 
 /**
@@ -908,5 +959,21 @@ export async function getAllContentWithUserData() {
             error
         );
         return [];
+    }
+}
+
+/**
+ * Manually refresh the content library page
+ */
+export async function refreshContentLibrary() {
+    try {
+        revalidatePath("/content");
+        return true;
+    } catch (error) {
+        console.error(
+            "Error refreshing content library:",
+            error
+        );
+        return false;
     }
 }

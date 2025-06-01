@@ -4,6 +4,7 @@ import {
     useContentWithUserData,
     useReadingHistory,
     useUpdateUserContentMetadata,
+    useUpdateUserContentMetadataField,
 } from "@/hooks/use-content-management";
 import { ContentWithUserData } from "@/types/content";
 import {
@@ -67,8 +68,9 @@ export function ContentDetail({
     // Get reading history
     useReadingHistory(content.id);
 
-    // Update metadata mutation
+    // Update metadata mutations
     const updateMetadata = useUpdateUserContentMetadata();
+    const updateField = useUpdateUserContentMetadataField();
 
     // Track if the component is mounted
     const isMounted = useRef(true);
@@ -372,20 +374,18 @@ export function ContentDetail({
                             <div className="grid grid-cols-2 gap-1 p-1">
                                 <button
                                     onClick={async () => {
-                                        await updateMetadata.mutateAsync(
+                                        await updateField.mutateAsync(
                                             {
                                                 contentId:
                                                     content.id,
-                                                data: {
-                                                    favorite:
-                                                        !(
-                                                            userData?.favorite ||
-                                                            false
-                                                        ),
-                                                },
+                                                field: "favorite",
+                                                value: !(
+                                                    userData?.favorite ||
+                                                    false
+                                                ),
                                             }
                                         );
-                                        handleDataUpdate();
+                                        // No need to call handleDataUpdate as the hook handles invalidation
                                     }}
                                     className={`flex items-center justify-center gap-1.5 ${
                                         userData?.favorite

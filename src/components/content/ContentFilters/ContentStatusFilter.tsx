@@ -14,7 +14,7 @@ import { useState } from "react";
 
 interface ContentStatusFilterProps {
     selectedStatuses: string[];
-    favorite: boolean;
+    favorite: boolean | undefined;
     onStatusToggle: (status: string) => void;
     onFavoriteToggle: () => void;
 }

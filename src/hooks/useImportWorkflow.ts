@@ -2,7 +2,7 @@ import {
     ImportItem,
     useImport,
     WorkflowStep,
-} from "@/contexts/ImportContext";
+} from "@/context/ImportContext";
 import { scanContentDirectoryWithProgress } from "@/server/actions/content";
 import { useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";

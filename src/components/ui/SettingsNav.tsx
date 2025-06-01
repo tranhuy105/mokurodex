@@ -3,7 +3,6 @@
 import {
     Book,
     ChevronDown,
-    Database,
     Download,
     Menu,
     Settings,
@@ -34,11 +33,6 @@ export function SettingsNav() {
             name: "Reading Preferences",
             href: "/settings/preferences",
             icon: <Book className="h-5 w-5" />,
-        },
-        {
-            name: "Database",
-            href: "/settings/database",
-            icon: <Database className="h-5 w-5" />,
         },
         {
             name: "Import",

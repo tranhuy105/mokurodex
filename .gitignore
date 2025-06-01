@@ -41,12 +41,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-nginx/logs/*
-nginx/temp/*
-nginx/logs/access.log
-nginx/logs/error.log
-nginx/logs/access.log.*
-nginx/logs/error.log.*
-nginx/logs/access.log.*.*
-nginx/logs/error.log.*.*

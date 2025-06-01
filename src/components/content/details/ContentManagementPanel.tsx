@@ -12,7 +12,10 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useUpdateUserContentMetadata } from "@/hooks/use-content-management";
+import {
+    useUpdateUserContentMetadata,
+    useUpdateUserContentMetadataField,
+} from "@/hooks/use-content-management";
 import {
     ContentStatus,
     ContentWithUserData,
@@ -39,6 +42,7 @@ export function ContentManagementPanel({
     onUpdate,
 }: ContentManagementPanelProps) {
     const updateMetadata = useUpdateUserContentMetadata();
+    const updateField = useUpdateUserContentMetadataField();
 
     const [isEditing, setIsEditing] = useState(false);
     const [editedData, setEditedData] = useState<{
@@ -86,12 +90,13 @@ export function ContentManagementPanel({
         const newRating =
             userData?.rating === rating ? null : rating;
 
-        await updateMetadata.mutateAsync({
+        await updateField.mutateAsync({
             contentId: content.id,
-            data: { rating: newRating },
+            field: "rating",
+            value: newRating,
         });
 
-        onUpdate();
+        // No need to call onUpdate() as the hook handles invalidation
     };
 
     // Handle status change

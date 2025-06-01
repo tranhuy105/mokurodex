@@ -41,7 +41,11 @@ export function ContentLibrary({
         status: statusParam
             ? statusParam.split(",")
             : undefined,
-        favorite: favoriteParam === "true",
+        favorite: favoriteParam
+            ? favoriteParam === "true"
+                ? true
+                : false
+            : undefined,
         isNsfw:
             nsfwParam === "true"
                 ? true

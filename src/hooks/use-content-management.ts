@@ -568,6 +568,52 @@ export function useUpdateUserContentMetadata() {
     });
 }
 
+/**
+ * Hook to update a single metadata field efficiently without triggering excessive rerenders
+ */
+export function useUpdateUserContentMetadataField() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({
+            contentId,
+            field,
+            value,
+        }: {
+            contentId: string;
+            field: string;
+            value: number | string | boolean | null;
+        }) =>
+            contentManagementActions.updateUserContentMetadataField(
+                contentId,
+                field,
+                value
+            ),
+        onSuccess: (data, { contentId, field }) => {
+            if (data) {
+                // Only show toast for significant changes
+                if (field === 'favorite') {
+                    const action = data.favorite ? 'added to' : 'removed from';
+                    toast.success(`Content ${action} favorites`);
+                    
+                    // Manually refresh content library to ensure proper display
+                    contentManagementActions.refreshContentLibrary();
+                }
+                
+                // Minimal invalidation - only invalidate the specific content
+                queryClient.invalidateQueries({
+                    queryKey: ["content", "withUserData", contentId],
+                });
+            }
+        },
+        onError: (error: Error) => {
+            toast.error(
+                `Error updating content: ${error.message}`
+            );
+        },
+    });
+}
+
 // ========== Reading History Hooks ==========
 
 /**

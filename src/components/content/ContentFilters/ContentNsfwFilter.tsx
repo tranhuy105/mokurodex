@@ -9,8 +9,10 @@ import {
 import { useState } from "react";
 
 interface ContentNsfwFilterProps {
-    isNsfw: boolean | null;
-    onNsfwFilterChange: (value: boolean | null) => void;
+    isNsfw: boolean | undefined;
+    onNsfwFilterChange: (
+        value: boolean | undefined
+    ) => void;
 }
 
 export function ContentNsfwFilter({
@@ -48,7 +50,9 @@ export function ContentNsfwFilter({
                     <div className="flex flex-wrap gap-2">
                         <button
                             onClick={() =>
-                                onNsfwFilterChange(null)
+                                onNsfwFilterChange(
+                                    undefined
+                                )
                             }
                             className={`px-2.5 py-1.5 rounded-md text-sm ${
                                 isNsfw === null

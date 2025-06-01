@@ -58,11 +58,14 @@ export function ContentLibraryFilters({
             );
         });
 
-    const [favorite, setFavorite] = useState<boolean>(
-        () => {
-            return searchParams.get("favorite") === "true";
-        }
-    );
+    const [favorite, setFavorite] = useState<
+        boolean | null
+    >(() => {
+        const favoriteParam = searchParams.get("favorite");
+        if (favoriteParam === "true") return true;
+        if (favoriteParam === "false") return false;
+        return null;
+    });
 
     const [isNsfw, setIsNsfw] = useState<boolean | null>(
         () => {

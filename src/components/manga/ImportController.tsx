@@ -12,7 +12,7 @@ import {
     TabsList,
     TabsTrigger,
 } from "@/components/ui/tabs";
-import { ImportProvider } from "@/contexts/ImportContext";
+import { ImportProvider } from "@/context/ImportContext";
 import {
     useAllContent,
     useDeleteContent,

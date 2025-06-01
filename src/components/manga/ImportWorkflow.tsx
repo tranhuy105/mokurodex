@@ -1,7 +1,7 @@
 import {
     ImportItem,
     useImport,
-} from "@/contexts/ImportContext";
+} from "@/context/ImportContext";
 import {
     Background,
     Controls,
