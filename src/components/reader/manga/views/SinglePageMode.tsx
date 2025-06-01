@@ -17,6 +17,7 @@ import {
     useState,
 } from "react";
 import {
+    ReactZoomPanPinchRef,
     TransformComponent,
     TransformWrapper,
 } from "react-zoom-pan-pinch";
@@ -55,7 +56,8 @@ const SinglePageMode = ({
     const [isCropperOpen, setIsCropperOpen] =
         useState(false);
     const [isZoomed, setIsZoomed] = useState(false);
-    const transformRef = useRef(null);
+    const [scale, setScale] = useState(1);
+    const transformRef = useRef<ReactZoomPanPinchRef>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const isMountedRef = useRef(true);
     // Track if TextBoxes should be visible
@@ -232,12 +234,7 @@ const SinglePageMode = ({
     // Reset zoom when page changes
     useEffect(() => {
         const resetZoom = async () => {
-            // @ts-expect-error - transformRef.current might be typed incorrectly
-            if (
-                transformRef.current &&
-                transformRef.current.resetTransform
-            ) {
-                // @ts-expect-error - Method is available but not properly typed in the library
+            if (transformRef.current) {
                 transformRef.current.resetTransform();
 
                 // Reset zoom state and ensure TextBoxes are visible
@@ -262,22 +259,51 @@ const SinglePageMode = ({
 
             if (isZoomed) {
                 e.preventDefault();
+                e.stopPropagation();
                 return false;
             }
             return true;
         };
 
-        // Use passive: false only for the wheel event
+        const preventTouchMove = (e: TouchEvent) => {
+            if (isZoomed) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            return true;
+        };
+
+        // Use passive: false for the wheel and touch events
         container.addEventListener(
             "wheel",
             preventWheelScroll,
             { passive: false }
+        );
+        container.addEventListener(
+            "touchmove",
+            preventTouchMove,
+            { passive: false }
+        );
+        document.addEventListener(
+            "wheel",
+            preventWheelScroll,
+            { passive: false, capture: true }
         );
 
         return () => {
             container.removeEventListener(
                 "wheel",
                 preventWheelScroll
+            );
+            container.removeEventListener(
+                "touchmove",
+                preventTouchMove
+            );
+            document.removeEventListener(
+                "wheel",
+                preventWheelScroll,
+                { capture: true }
             );
         };
     }, [isZoomed]);
@@ -287,34 +313,19 @@ const SinglePageMode = ({
 
     // Optimize zoom control handlers
     const handleZoomIn = () => {
-        // @ts-expect-error - transformRef.current might be typed incorrectly
-        if (
-            transformRef.current &&
-            transformRef.current.zoomIn
-        ) {
-            // @ts-expect-error - Method is available but not properly typed in the library
+        if (transformRef.current) {
             transformRef.current.zoomIn(0.1);
         }
     };
 
     const handleZoomOut = () => {
-        // @ts-expect-error - transformRef.current might be typed incorrectly
-        if (
-            transformRef.current &&
-            transformRef.current.zoomOut
-        ) {
-            // @ts-expect-error - Method is available but not properly typed in the library
+        if (transformRef.current) {
             transformRef.current.zoomOut(0.1);
         }
     };
 
     const handleResetTransform = () => {
-        // @ts-expect-error - transformRef.current might be typed incorrectly
-        if (
-            transformRef.current &&
-            transformRef.current.resetTransform
-        ) {
-            // @ts-expect-error - Method is available but not properly typed in the library
+        if (transformRef.current) {
             transformRef.current.resetTransform();
         }
     };
@@ -344,6 +355,7 @@ const SinglePageMode = ({
                         const newScale = ref.state.scale;
                         const wasZoomed = isZoomed;
                         setIsZoomed(newScale > 1.01);
+                        setScale(newScale);
 
                         // Toggle TextBoxes visibility based on zoom state
                         if (newScale > 1.01 && !wasZoomed) {
@@ -366,8 +378,25 @@ const SinglePageMode = ({
                 {() => (
                     <>
                         <TransformComponent
-                            wrapperClass="h-full w-full flex justify-center items-center"
-                            contentClass="flex justify-center items-center h-full w-full"
+                            wrapperStyle={{
+                                width: "100%",
+                                height: "100%",
+                                overflow: "hidden",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                            contentStyle={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: isZoomed
+                                    ? "grab"
+                                    : "default",
+                                willChange: "transform",
+                                transition:
+                                    "transform 0.1s ease",
+                            }}
                         >
                             {page && (
                                 <div>
@@ -474,6 +503,13 @@ const SinglePageMode = ({
                         )}
                     </button>
                 </>
+            )}
+
+            {/* Zoom indicator */}
+            {isZoomed && (
+                <div className="fixed bottom-4 left-4 px-2 py-1 bg-black bg-opacity-60 text-white text-xs rounded z-50">
+                    {Math.round(scale * 100)}%
+                </div>
             )}
         </div>
     );
