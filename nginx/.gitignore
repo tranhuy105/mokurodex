@@ -1,0 +1,14 @@
+# Bỏ file thực thi
+nginx.exe
+
+# Bỏ logs và PID
+logs/
+*.log
+*.pid
+
+temp/
+contrib/
+docs/
+
+*.swp
+*.swo
