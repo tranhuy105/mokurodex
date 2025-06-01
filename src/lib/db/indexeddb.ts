@@ -2,14 +2,13 @@ import { IDBPDatabase, openDB } from "idb";
 
 // Define the database name and version
 export const DB_NAME = "mokurodex-offline";
-export const DB_VERSION = 3;
+export const DB_VERSION = 4; // Increment version to trigger upgrade
 
 // Define the required object stores
 export const STORES = {
     DOWNLOADS: "downloads",
-    IMAGES: "images",
-    EPUBS: "epubs",
     HTML: "html",
+    // Removed IMAGES and EPUBS stores
 };
 
 /**
@@ -45,30 +44,27 @@ export async function initializeOfflineDB(): Promise<IDBPDatabase> {
             }
 
             if (
-                !db.objectStoreNames.contains(STORES.IMAGES)
-            ) {
-                console.log("Creating images store");
-                db.createObjectStore(STORES.IMAGES, {
-                    keyPath: "id",
-                });
-            }
-
-            if (
-                !db.objectStoreNames.contains(STORES.EPUBS)
-            ) {
-                console.log("Creating epubs store");
-                db.createObjectStore(STORES.EPUBS, {
-                    keyPath: "id",
-                });
-            }
-
-            if (
                 !db.objectStoreNames.contains(STORES.HTML)
             ) {
                 console.log("Creating html store");
                 db.createObjectStore(STORES.HTML, {
                     keyPath: "id",
                 });
+            }
+
+            // Clean up old stores if they exist
+            if (db.objectStoreNames.contains("images")) {
+                console.log(
+                    "Removing deprecated images store"
+                );
+                db.deleteObjectStore("images");
+            }
+
+            if (db.objectStoreNames.contains("epubs")) {
+                console.log(
+                    "Removing deprecated epubs store"
+                );
+                db.deleteObjectStore("epubs");
             }
         },
         blocked() {
@@ -118,7 +114,10 @@ export async function calculateStorageSize(
                 key.startsWith(prefix)
             ) {
                 const item = await store.get(key);
-                if (item?.blob) {
+                if (item?.html) {
+                    // Calculate HTML content size
+                    totalSize += new Blob([item.html]).size;
+                } else if (item?.blob) {
                     totalSize += item.blob.size;
                 }
             }

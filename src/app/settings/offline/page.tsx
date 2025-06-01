@@ -35,17 +35,40 @@ interface OfflineContent {
     volumeId: string;
     volumeNumber: number;
     volumeTitle: string;
-    size: number;
     downloadDate: Date;
+    coverImage?: string;
+    storageSize?: number;
 }
+
+// Helper function to format bytes to a human-readable format
+const formatBytes = (
+    bytes: number,
+    decimals: number = 2
+) => {
+    if (bytes === 0) return "0 Bytes";
+
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return (
+        parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) +
+        " " +
+        sizes[i]
+    );
+};
 
 export default function OfflineSettingsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [downloads, setDownloads] = useState<
         OfflineContent[]
     >([]);
-    const [totalSize, setTotalSize] = useState(0);
     const [db, setDb] = useState<IDBPDatabase | null>(null);
+    const [totalSize, setTotalSize] = useState<number>(0);
+
+    console.log(downloads);
 
     useEffect(() => {
         const initDB = async () => {
@@ -56,8 +79,7 @@ export default function OfflineSettingsPage() {
                 // Verify all required stores exist
                 const requiredStores = [
                     STORES.DOWNLOADS,
-                    STORES.IMAGES,
-                    STORES.EPUBS,
+                    STORES.HTML,
                 ];
                 const missingStores = requiredStores.filter(
                     (store) =>
@@ -130,11 +152,12 @@ export default function OfflineSettingsPage() {
             setDownloads(processedDownloads);
 
             // Calculate total size
-            const size = processedDownloads.reduce(
-                (total, item) => total + (item.size || 0),
+            const totalSizeCalc = processedDownloads.reduce(
+                (total, item) =>
+                    total + (item.storageSize || 0),
                 0
             );
-            setTotalSize(size);
+            setTotalSize(totalSizeCalc);
         } catch (error) {
             console.error(
                 "Error loading downloads:",
@@ -153,54 +176,32 @@ export default function OfflineSettingsPage() {
                 await db.delete(STORES.DOWNLOADS, item.id);
             }
 
-            // Delete associated data
-            if (item.contentType === "manga") {
-                // Delete all page images for this volume
-                if (verifyStoreExists(db, STORES.IMAGES)) {
-                    try {
-                        const tx = db.transaction(
-                            STORES.IMAGES,
-                            "readwrite"
-                        );
-                        const store = tx.objectStore(
-                            STORES.IMAGES
-                        );
-                        const keys =
-                            await store.getAllKeys();
+            if (verifyStoreExists(db, STORES.HTML)) {
+                try {
+                    const tx = db.transaction(
+                        STORES.HTML,
+                        "readwrite"
+                    );
+                    const store = tx.objectStore(
+                        STORES.HTML
+                    );
+                    const keys = await store.getAllKeys();
 
-                        for (const key of keys) {
-                            if (
-                                typeof key === "string" &&
-                                key.startsWith(
-                                    item.volumeId
-                                )
-                            ) {
-                                await store.delete(key);
-                            }
+                    for (const key of keys) {
+                        if (
+                            typeof key === "string" &&
+                            key.startsWith(item.volumeId)
+                        ) {
+                            await store.delete(key);
                         }
+                    }
 
-                        await tx.done;
-                    } catch (error) {
-                        console.error(
-                            "Error deleting images:",
-                            error
-                        );
-                    }
-                }
-            } else {
-                // Delete EPUB file
-                if (verifyStoreExists(db, STORES.EPUBS)) {
-                    try {
-                        await db.delete(
-                            STORES.EPUBS,
-                            item.volumeId
-                        );
-                    } catch (error) {
-                        console.error(
-                            "Error deleting EPUB:",
-                            error
-                        );
-                    }
+                    await tx.done;
+                } catch (error) {
+                    console.error(
+                        "Error deleting images:",
+                        error
+                    );
                 }
             }
 
@@ -227,12 +228,8 @@ export default function OfflineSettingsPage() {
                 await db.clear(STORES.DOWNLOADS);
             }
 
-            if (verifyStoreExists(db, STORES.IMAGES)) {
-                await db.clear(STORES.IMAGES);
-            }
-
-            if (verifyStoreExists(db, STORES.EPUBS)) {
-                await db.clear(STORES.EPUBS);
+            if (verifyStoreExists(db, STORES.HTML)) {
+                await db.clear(STORES.HTML);
             }
 
             // Refresh the downloads list
@@ -247,22 +244,6 @@ export default function OfflineSettingsPage() {
             );
             toast.error("Failed to clear offline content");
         }
-    };
-
-    const formatSize = (bytes: number): string => {
-        if (bytes === 0) return "0 Bytes";
-
-        const sizes = ["Bytes", "KB", "MB", "GB"];
-        const i = Math.floor(
-            Math.log(bytes) / Math.log(1024)
-        );
-        return (
-            parseFloat(
-                (bytes / Math.pow(1024, i)).toFixed(2)
-            ) +
-            " " +
-            sizes[i]
-        );
     };
 
     return (
@@ -293,7 +274,7 @@ export default function OfflineSettingsPage() {
                                     <p className="text-sm text-muted-foreground">
                                         Total Storage Used:{" "}
                                         <span className="font-medium">
-                                            {formatSize(
+                                            {formatBytes(
                                                 totalSize
                                             )}
                                         </span>
@@ -353,38 +334,55 @@ export default function OfflineSettingsPage() {
                                                 }
                                                 className="flex justify-between items-center p-4 border rounded-md"
                                             >
-                                                <div>
-                                                    <h3 className="font-medium">
-                                                        <Link
-                                                            href={`/content/${item.contentId}`}
-                                                            className="hover:underline"
-                                                        >
+                                                <div className="flex gap-4">
+                                                    {item.coverImage && (
+                                                        <div className="h-16 w-12 rounded overflow-hidden flex-shrink-0">
+                                                            <img
+                                                                src={
+                                                                    item.coverImage
+                                                                }
+                                                                alt={
+                                                                    item.volumeTitle
+                                                                }
+                                                                className="h-full w-full object-cover"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <h3 className="font-medium">
+                                                            <Link
+                                                                href={`/content/${item.contentId}`}
+                                                                className="hover:underline"
+                                                            >
+                                                                {
+                                                                    item.contentTitle
+                                                                }
+                                                            </Link>
+                                                        </h3>
+                                                        <p className="text-sm text-muted-foreground">
                                                             {
-                                                                item.contentTitle
-                                                            }
-                                                        </Link>
-                                                    </h3>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {
-                                                            item.volumeTitle
-                                                        }{" "}
-                                                        •{" "}
-                                                        {formatSize(
-                                                            item.size
-                                                        )}
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        Downloaded{" "}
-                                                        {formatDistanceToNow(
-                                                            new Date(
-                                                                item.downloadDate
-                                                            ),
-                                                            {
-                                                                addSuffix:
-                                                                    true,
-                                                            }
-                                                        )}
-                                                    </p>
+                                                                item.volumeTitle
+                                                            }{" "}
+                                                            •{" "}
+                                                            {item.storageSize
+                                                                ? formatBytes(
+                                                                      item.storageSize
+                                                                  )
+                                                                : "Unknown size"}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Downloaded{" "}
+                                                            {formatDistanceToNow(
+                                                                new Date(
+                                                                    item.downloadDate
+                                                                ),
+                                                                {
+                                                                    addSuffix:
+                                                                        true,
+                                                                }
+                                                            )}
+                                                        </p>
+                                                    </div>
                                                 </div>
                                                 <Button
                                                     onClick={() =>

@@ -207,6 +207,9 @@ export default function EpubReaderContainer({
                     volumeId={volume.id}
                     volumeNumber={volume.volumeNumber}
                     volumeTitle={volume.volumeTitle}
+                    coverImage={
+                        volume.coverImage || undefined
+                    }
                 />
             </div>
         </div>

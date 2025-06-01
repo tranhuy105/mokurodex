@@ -1,17 +1,18 @@
-// Offline SPA JavaScript - Fixed Version
+// Offline MokuroDex JavaScript - Enhanced Version
 const STORES = {
     DOWNLOADS: "downloads",
     HTML: "html",
 };
 
 const DB_NAME = "mokurodex-offline";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 // State management
 const state = {
-    currentView: "library",
+    currentView: "welcome", // Default view is welcome
     currentContent: null,
     offlineContent: [],
+    recentlyRead: [],
     isLoading: true,
     isOnline: navigator.onLine,
     debugInfo: [],
@@ -29,12 +30,22 @@ const elements = {
     contentLibrary: document.getElementById(
         "content-library"
     ),
+    welcomeView: document.getElementById("welcome-view"),
+    continueReading: document.getElementById(
+        "continue-reading"
+    ),
+    continueReadingGrid: document.getElementById(
+        "continue-reading-grid"
+    ),
     readerContainer: document.getElementById(
         "reader-container"
     ),
     debugInfo: document.getElementById("debug-info"),
     debugDetails: document.getElementById("debug-details"),
     debugToggle: document.getElementById("debug-toggle"),
+    browseCta: document.getElementById(
+        "browse-library-btn"
+    ),
 };
 
 // Debug logging
@@ -54,7 +65,7 @@ function updateDebugDisplay() {
     }
 }
 
-// Helper function to open IndexedDB - Fixed version
+// Helper function to open IndexedDB
 function openOfflineDB() {
     return new Promise((resolve, reject) => {
         addDebugInfo("Attempting to open IndexedDB");
@@ -202,6 +213,9 @@ async function initApp() {
         // Setup event listeners
         setupEventListeners();
 
+        // Toggle debug info
+        setupDebugToggle();
+
         // Render the initial view
         renderView();
 
@@ -257,6 +271,13 @@ async function loadOfflineContent(db) {
         );
 
         state.offlineContent = processedDownloads;
+
+        // Create a list of recently read items (sort by download date for now)
+        // In a real app, you'd track actual reading history
+        state.recentlyRead = [...processedDownloads]
+            .sort((a, b) => b.downloadDate - a.downloadDate)
+            .slice(0, 3);
+
         state.isLoading = false;
 
         addDebugInfo(
@@ -295,6 +316,16 @@ function setupEventListeners() {
         renderView();
     });
 
+    // Browse library CTA button on welcome screen
+    if (elements.browseCta) {
+        elements.browseCta.addEventListener("click", () => {
+            state.currentView = "library";
+            state.currentContent = null;
+            updateNavButtons();
+            renderView();
+        });
+    }
+
     // Check connection button
     const checkConnectionBtn = document.getElementById(
         "check-connection"
@@ -309,6 +340,24 @@ function setupEventListeners() {
     // Online/offline status changes
     window.addEventListener("online", updateOnlineStatus);
     window.addEventListener("offline", updateOnlineStatus);
+}
+
+// Setup debug toggle
+function setupDebugToggle() {
+    if (elements.debugToggle) {
+        elements.debugToggle.addEventListener(
+            "click",
+            () => {
+                if (elements.debugInfo) {
+                    const isVisible =
+                        elements.debugInfo.style.display !==
+                        "none";
+                    elements.debugInfo.style.display =
+                        isVisible ? "none" : "block";
+                }
+            }
+        );
+    }
 }
 
 // Update navigation button states
@@ -341,13 +390,18 @@ function renderView() {
     if (!state.isLoading) {
         if (state.currentContent) {
             // Show reader view
+            elements.welcomeView.style.display = "none";
             elements.contentLibrary.style.display = "none";
             elements.noContent.style.display = "none";
             elements.readerContainer.style.display =
                 "block";
             renderReader();
+        } else if (state.currentView === "welcome") {
+            // Show welcome view
+            renderWelcomeView();
         } else {
             // Show library view
+            elements.welcomeView.style.display = "none";
             elements.readerContainer.style.display = "none";
             elements.contentLibrary.style.display = "grid";
 
@@ -362,6 +416,96 @@ function renderView() {
             }
         }
     }
+}
+
+// Render the welcome view
+function renderWelcomeView() {
+    elements.welcomeView.style.display = "block";
+    elements.contentLibrary.style.display = "none";
+    elements.readerContainer.style.display = "none";
+    elements.noContent.style.display = "none";
+
+    // Render "Continue Reading" section if there are items
+    if (state.recentlyRead.length > 0) {
+        elements.continueReading.style.display = "block";
+        renderContinueReading();
+    } else {
+        elements.continueReading.style.display = "none";
+    }
+}
+
+// Render the "Continue Reading" section
+function renderContinueReading() {
+    elements.continueReadingGrid.innerHTML = "";
+
+    state.recentlyRead.forEach((item) => {
+        // Create a card for each item
+        const card = document.createElement("div");
+        card.className = "reading-card";
+        card.onclick = () => openContent(item);
+
+        // Create cover element
+        const cover = document.createElement("div");
+        cover.className = "reading-cover";
+
+        // Use the stored cover image if available
+        if (item.coverImage) {
+            const img = document.createElement("img");
+            img.src = item.coverImage;
+            img.alt =
+                item.volumeTitle ||
+                `Volume ${item.volumeNumber}`;
+            cover.appendChild(img);
+        } else {
+            // Fallback to colored div
+            cover.style.backgroundColor = getRandomColor(
+                item.contentId
+            );
+            cover.textContent =
+                item.contentType === "manga" ? "📚" : "📖";
+            cover.style.display = "flex";
+            cover.style.alignItems = "center";
+            cover.style.justifyContent = "center";
+            cover.style.fontSize = "2rem";
+        }
+
+        // Create info element
+        const info = document.createElement("div");
+        info.className = "reading-info";
+
+        // Add title
+        const title = document.createElement("h3");
+        title.className = "reading-title";
+        title.textContent =
+            item.volumeTitle ||
+            `Volume ${item.volumeNumber}`;
+
+        // Add subtitle
+        const subtitle = document.createElement("p");
+        subtitle.className = "reading-subtitle";
+        subtitle.textContent = item.contentTitle;
+
+        // Add continue button
+        const continueButton =
+            document.createElement("button");
+        continueButton.className = "continue-button";
+        continueButton.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            Continue
+        `;
+
+        // Add all elements to the card
+        info.appendChild(title);
+        info.appendChild(subtitle);
+        info.appendChild(continueButton);
+
+        card.appendChild(cover);
+        card.appendChild(info);
+
+        elements.continueReadingGrid.appendChild(card);
+    });
 }
 
 // Render content library
@@ -394,14 +538,24 @@ function renderContentLibrary() {
         card.className = "content-card";
         card.onclick = () => openContent(item);
 
-        // Create placeholder cover
+        // Create cover element
         const coverBg = document.createElement("div");
         coverBg.className = "content-cover";
-        coverBg.style.backgroundColor = getRandomColor(
-            item.contentId
-        );
-        coverBg.textContent =
-            item.contentType === "manga" ? "📚" : "📖";
+
+        // Use the stored cover image if available
+        if (item.coverImage) {
+            coverBg.style.backgroundImage = `url('${item.coverImage}')`;
+            coverBg.style.backgroundSize = "cover";
+            coverBg.style.backgroundPosition = "center";
+            coverBg.innerHTML = ""; // Clear emoji if it was there
+        } else {
+            // Fallback to colored div with emoji
+            coverBg.style.backgroundColor = getRandomColor(
+                item.contentId
+            );
+            coverBg.textContent =
+                item.contentType === "manga" ? "📚" : "📖";
+        }
 
         // Add content info
         const info = document.createElement("div");
@@ -423,6 +577,23 @@ function renderContentLibrary() {
             item.contentType === "manga"
                 ? "Manga"
                 : "Light Novel";
+
+        // Add page count if available
+        if (
+            item.pageCount &&
+            item.contentType === "manga"
+        ) {
+            const pageInfo = document.createElement("div");
+            pageInfo.className = "content-pages";
+            pageInfo.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                ${item.pageCount} pages
+            `;
+            info.appendChild(pageInfo);
+        }
 
         info.appendChild(title);
         info.appendChild(subtitle);
@@ -453,6 +624,7 @@ async function openContent(content) {
 
     // Show loading state
     elements.loading.style.display = "flex";
+    elements.welcomeView.style.display = "none";
     elements.contentLibrary.style.display = "none";
     elements.noContent.style.display = "none";
     elements.readerContainer.style.display = "none";
@@ -506,18 +678,29 @@ async function openContent(content) {
 
 // Render pre-processed HTML content
 async function renderHTMLContent(html) {
+    // Use the content title if available
+    const contentTitle = state.currentContent
+        ? `${state.currentContent.contentTitle} - ${
+              state.currentContent.volumeTitle ||
+              `Volume ${state.currentContent.volumeNumber}`
+          }`
+        : "Content";
+
     elements.readerContainer.innerHTML = `
-        <button class="back-button" id="back-to-library">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 12H5M12 19l-7-7 7-7"/>
-            </svg>
-            Back to Library
-        </button>
-        <div class="html-reader" style="width: 100%; height: 100%; margin-bottom: 100px;">
+        <div class="reader-header">
+            <button class="back-button" id="back-to-library">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                Back
+            </button>
+            <h2>${contentTitle}</h2>
+        </div>
+        <div class="html-reader">
             <iframe 
                 id="content-frame" 
                 sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                style="width: 100%; height: calc(100vh - 60px); border: none; display: block; min-height: 500px;"
+                style="width: 100%; height: calc(100vh - 120px); border: none; display: block; min-height: 500px; background-color: #fff;"
                 frameborder="0">
             </iframe>
         </div>`;
@@ -548,7 +731,14 @@ async function renderHTMLContent(html) {
 function showError(message) {
     const errorElement = document.createElement("div");
     errorElement.className = "error-message";
-    errorElement.textContent = message;
+    errorElement.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        ${message}
+    `;
     document.body.appendChild(errorElement);
 
     setTimeout(() => {
@@ -598,10 +788,13 @@ function updateOnlineStatus() {
 function showMessage(message) {
     const msgElement = document.createElement("div");
     msgElement.className = "message-toast";
-    msgElement.textContent = message;
-    msgElement.style.backgroundColor = state.isOnline
-        ? "#059669"
-        : "#3b82f6";
+    msgElement.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+        ${message}
+    `;
     document.body.appendChild(msgElement);
 
     setTimeout(() => {

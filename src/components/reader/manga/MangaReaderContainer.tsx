@@ -298,6 +298,10 @@ export default function MangaReaderContainer({
                         currentVolume.volumeNumber
                     }
                     volumeTitle={currentVolume.volumeTitle}
+                    coverImage={
+                        currentVolume.coverImage ||
+                        undefined
+                    }
                 />
             </div>
         </div>

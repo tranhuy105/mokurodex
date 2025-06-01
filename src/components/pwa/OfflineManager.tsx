@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import {
     STORES,
     initializeOfflineDB,
@@ -11,6 +10,7 @@ import JSZip from "jszip";
 import {
     CheckCircle,
     Download,
+    Loader2,
     Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -24,6 +24,7 @@ interface OfflineManagerProps {
     volumeId: string;
     volumeNumber: number;
     volumeTitle: string;
+    coverImage?: string;
 }
 
 export function OfflineManager({
@@ -33,6 +34,7 @@ export function OfflineManager({
     volumeId,
     volumeNumber,
     volumeTitle,
+    coverImage,
 }: OfflineManagerProps) {
     const [isDownloaded, setIsDownloaded] = useState(false);
     const [isDownloading, setIsDownloading] =
@@ -55,8 +57,7 @@ export function OfflineManager({
                 // Verify all required stores exist
                 const requiredStores = [
                     STORES.DOWNLOADS,
-                    STORES.IMAGES,
-                    STORES.EPUBS,
+                    STORES.HTML,
                 ];
                 const missingStores = requiredStores.filter(
                     (store) =>
@@ -127,9 +128,7 @@ export function OfflineManager({
         // Verify all required stores exist
         const requiredStores = [
             STORES.DOWNLOADS,
-            contentType === "manga"
-                ? STORES.IMAGES
-                : STORES.EPUBS,
+            STORES.HTML,
         ];
         const missingStores = requiredStores.filter(
             (store) => !verifyStoreExists(db, store)
@@ -172,6 +171,34 @@ export function OfflineManager({
         }
     };
 
+    // Add a function to convert image URL to data URL
+    async function convertImageToDataUrl(
+        imageUrl: string
+    ): Promise<string> {
+        try {
+            const response = await fetch(imageUrl);
+            if (!response.ok) {
+                throw new Error(
+                    `Failed to fetch image: ${response.status}`
+                );
+            }
+
+            const blob = await response.blob();
+            return new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () =>
+                    resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+            });
+        } catch (error) {
+            console.error(
+                "Error converting image to data URL:",
+                error
+            );
+            return ""; // Return empty string if failed
+        }
+    }
+
     const downloadMangaVolume = async (key: string) => {
         if (
             !db ||
@@ -199,6 +226,13 @@ export function OfflineManager({
             );
         }
 
+        // Convert cover image to data URL if available
+        let volumeCoverDataUrl = "";
+        if (coverImage) {
+            volumeCoverDataUrl =
+                await convertImageToDataUrl(coverImage);
+        }
+
         // Fetch the mokuro HTML file
         const mokuroHtmlResponse = await fetch(
             `/api/mokuro-html?volumeId=${volumeId}`
@@ -220,6 +254,7 @@ export function OfflineManager({
         let downloadedPages = 0;
         let failedPages = 0;
         const pageDataUrls = new Map(); // Map of page numbers to data URLs
+        let totalStorageSize = 0; // Track actual storage size
 
         for (const page of pages) {
             try {
@@ -247,6 +282,9 @@ export function OfflineManager({
 
                 // Store the data URL by page number for structured replacement
                 pageDataUrls.set(page.pageNumber, dataUrl);
+
+                // Add to total storage size (data URL includes base64 encoding overhead)
+                totalStorageSize += dataUrl.length;
 
                 // Update progress
                 downloadedPages++;
@@ -314,6 +352,9 @@ export function OfflineManager({
                 contentType: "manga",
                 html: processedHtml,
             });
+
+            // Add HTML size to total storage
+            totalStorageSize += processedHtml.length;
         }
 
         if (failedPages > 0) {
@@ -322,7 +363,7 @@ export function OfflineManager({
             );
         }
 
-        // Record the download
+        // Record the download with correct storage size
         await db.put(STORES.DOWNLOADS, {
             id: key,
             contentId,
@@ -335,6 +376,8 @@ export function OfflineManager({
             pageCount: totalPages,
             downloadedPages,
             hasProcessedHtml: hasHtmlFile,
+            coverImage: volumeCoverDataUrl,
+            storageSize: totalStorageSize, // Use actual calculated size
         });
     };
 
@@ -347,6 +390,13 @@ export function OfflineManager({
             throw new Error(
                 "Required database stores not available"
             );
+        }
+
+        // Convert cover image to data URL if available
+        let volumeCoverDataUrl = "";
+        if (coverImage) {
+            volumeCoverDataUrl =
+                await convertImageToDataUrl(coverImage);
         }
 
         // Fetch the EPUB file
@@ -379,7 +429,10 @@ export function OfflineManager({
                 html: processedHtml,
             });
 
-            // Record the download
+            // Calculate actual HTML size (includes embedded images)
+            const htmlSize = processedHtml.length;
+
+            // Record the download with correct storage size
             await db.put(STORES.DOWNLOADS, {
                 id: key,
                 contentId,
@@ -390,6 +443,8 @@ export function OfflineManager({
                 volumeTitle,
                 downloadDate: new Date(),
                 hasProcessedHtml: true,
+                coverImage: volumeCoverDataUrl,
+                storageSize: htmlSize, // Use actual string length
             });
 
             setDownloadProgress(100);
@@ -722,50 +777,69 @@ export function OfflineManager({
     }
 
     return (
-        <div className="flex items-center gap-2">
+        <div className="fixed bottom-4 left-4 z-50">
             {isDownloaded ? (
-                <Button
-                    onClick={removeDownload}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-2"
-                >
-                    <Trash2 size={16} />
-                    <span>Remove Download</span>
-                </Button>
+                // Downloaded state - show remove option
+                <div className="relative group">
+                    <button
+                        onClick={removeDownload}
+                        className="flex items-center justify-center w-12 h-12 bg-slate-900/95 hover:bg-red-600/90 border border-slate-700/50 hover:border-red-500/50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 backdrop-blur-sm group"
+                        title="Remove from offline storage"
+                    >
+                        <Trash2
+                            size={18}
+                            className="text-slate-300 group-hover:text-white transition-colors"
+                        />
+                    </button>
+                    {/* Downloaded indicator */}
+                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-md border-2 border-slate-900">
+                        <CheckCircle
+                            size={12}
+                            className="text-white"
+                        />
+                    </div>
+                </div>
             ) : isDownloading ? (
-                <div className="flex items-center gap-2">
-                    <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                // Downloading state with progress
+                <div className="relative">
+                    {/* Progress percentage above button */}
+                    <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-slate-900/95 border border-slate-700/50 rounded-md shadow-lg backdrop-blur-sm">
+                        <span className="text-xs text-blue-300 font-medium whitespace-nowrap">
+                            {downloadProgress}%
+                        </span>
+                    </div>
+                    {/* Button - same size as others */}
+                    <div className="flex items-center justify-center w-12 h-12 bg-slate-900/95 border border-blue-500/50 rounded-xl shadow-lg backdrop-blur-sm">
+                        <Loader2
+                            size={18}
+                            className="text-blue-400 animate-spin"
+                        />
+                    </div>
+                    {/* Progress bar at bottom of button */}
+                    <div className="absolute bottom-1 left-1 right-1 bg-slate-800/80 rounded-full h-1">
                         <div
-                            className="h-full bg-primary transition-all duration-300"
+                            className="h-full bg-gradient-to-r from-blue-400 to-blue-500 rounded-full transition-all duration-300 ease-out"
                             style={{
-                                width: `${downloadProgress}%`,
+                                width: `${Math.max(
+                                    downloadProgress,
+                                    4
+                                )}%`,
                             }}
                         />
                     </div>
-                    <span className="text-sm">
-                        {downloadProgress}%
-                    </span>
                 </div>
             ) : (
-                <Button
+                // Download button
+                <button
                     onClick={downloadContent}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-2"
+                    className="flex items-center justify-center w-12 h-12 bg-slate-900/95 hover:bg-blue-600/90 border border-slate-700/50 hover:border-blue-500/50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 backdrop-blur-sm group"
+                    title="Download for offline reading"
                 >
-                    <Download size={16} />
-                    <span>Download for Offline</span>
-                </Button>
-            )}
-
-            {isDownloaded && (
-                <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                    <CheckCircle size={16} />
-                    <span className="text-sm">
-                        Available Offline
-                    </span>
-                </div>
+                    <Download
+                        size={18}
+                        className="text-slate-300 group-hover:text-white transition-colors"
+                    />
+                </button>
             )}
         </div>
     );
