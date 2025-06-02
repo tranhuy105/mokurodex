@@ -72,6 +72,13 @@ const SinglePageMode = ({
         [pages, currentPage]
     );
 
+    // Add a state to track the current transform
+    const [transform, setTransform] = useState({
+        scale: 1,
+        positionX: 0,
+        positionY: 0,
+    });
+
     const handleResetTransform = () => {
         if (transformRef.current) {
             transformRef.current.resetTransform();
@@ -151,23 +158,18 @@ const SinglePageMode = ({
             currentPage > 1 &&
             onPageChange &&
             !isCropperOpen &&
-            !isZoomed
+            scale <= 1.1 // Only block navigation if significantly zoomed
         ) {
             onPageChange(currentPage - 1);
         }
-    }, [
-        currentPage,
-        onPageChange,
-        isCropperOpen,
-        isZoomed,
-    ]);
+    }, [currentPage, onPageChange, isCropperOpen, scale]);
 
     const handleNextPage = useCallback(() => {
         if (
             currentPage < pages.length &&
             onPageChange &&
             !isCropperOpen &&
-            !isZoomed
+            scale <= 1.1 // Only block navigation if significantly zoomed
         ) {
             onPageChange(currentPage + 1);
         }
@@ -176,7 +178,7 @@ const SinglePageMode = ({
         onPageChange,
         pages.length,
         isCropperOpen,
-        isZoomed,
+        scale,
     ]);
 
     // Handle cropper state change
@@ -320,6 +322,7 @@ const SinglePageMode = ({
                 isLoaded={isLoaded}
                 isPrefetching={isPrefetching}
                 onLoadImage={handleResetTransform}
+                transform={transform}
             />
         );
     }, [
@@ -329,6 +332,7 @@ const SinglePageMode = ({
         handleCropperStateChange,
         isLoaded,
         isPrefetching,
+        transform,
     ]);
 
     // Early return if page is not available
@@ -371,6 +375,18 @@ const SinglePageMode = ({
                 onTransformed={(ref) => {
                     if (isMountedRef.current) {
                         const newScale = ref.state.scale;
+                        const newPositionX =
+                            ref.state.positionX;
+                        const newPositionY =
+                            ref.state.positionY;
+
+                        // Update transform state
+                        setTransform({
+                            scale: newScale,
+                            positionX: newPositionX,
+                            positionY: newPositionY,
+                        });
+
                         // Only update zoom state when there's an actual change
                         if (
                             Math.abs(newScale - scale) >
