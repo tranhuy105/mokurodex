@@ -99,10 +99,8 @@ export default function TextBoxes({
             );
         };
     }, [activeBoxIndex]);
-
-    // Sort blocks by area (largest first)
     const sortedBlocks = blocks
-        .map((block) => {
+        .map((block, originalIndex) => {
             // Parse the JSON string to get the lines array
             const lines = block.text
                 ? typeof block.text === "string" &&
@@ -141,9 +139,19 @@ export default function TextBoxes({
                     : "horizontal-tb",
                 lines,
                 area,
+                // @ts-expect-error: them zIndex vao database later
+                zIndex: block.zIndex || 10, // Sử dụng zIndex từ database
+                originalIndex, // Giữ lại index gốc để làm key
             };
         })
-        .sort((a, b) => b.area - a.area);
+        .sort((a, b) => {
+            // Sort by z-index first (higher z-index = rendered later = on top)
+            if (a.zIndex !== b.zIndex) {
+                return a.zIndex - b.zIndex;
+            }
+            // Then by area (larger area first)
+            return b.area - a.area;
+        });
 
     // Set container scale to match image size when rendered
     useEffect(() => {
@@ -351,17 +359,24 @@ export default function TextBoxes({
                         top,
                         width,
                         writingMode,
+                        zIndex,
+                        originalIndex,
                     },
                     index
                 ) => {
                     const isActive =
                         activeBoxIndex === index;
+                    const shouldShowText = isMobile
+                        ? isActive
+                        : false; // Chỉ hiện text khi active trên mobile
 
                     return (
                         <div
-                            key={`textBox-${index}`}
+                            key={`textBox-${originalIndex}`}
                             className={`absolute cursor-pointer pointer-events-auto ${
-                                isMobile ? "" : "group"
+                                isMobile
+                                    ? "border border-red-500 border-opacity-30"
+                                    : ""
                             }`}
                             style={{
                                 width,
@@ -375,43 +390,80 @@ export default function TextBoxes({
                                     | "horizontal-tb",
                                 padding: 0,
                                 lineHeight: "1.1em",
-                                zIndex: isActive ? 20 : 20,
+                                zIndex: isActive
+                                    ? 999
+                                    : zIndex, // Sử dụng zIndex từ data
+                                border: "1px solid rgba(0, 0, 0, 0)", // Transparent border như HTML gốc
+                                whiteSpace: "nowrap", // Giống HTML gốc
                             }}
                             data-text={lines.join(" ")}
                             data-box-id={index}
                             onClick={(e) =>
                                 handleTextBoxClick(index, e)
                             }
+                            onMouseEnter={
+                                !isMobile
+                                    ? () =>
+                                          setActiveBoxIndex(
+                                              index
+                                          )
+                                    : undefined
+                            }
+                            onMouseLeave={
+                                !isMobile
+                                    ? () =>
+                                          setActiveBoxIndex(
+                                              null
+                                          )
+                                    : undefined
+                            }
                         >
-                            <div
-                                className={`w-full h-full flex flex-col items-start bg-gray-50 bg-opacity-90 font-bold shadow-sm ${
-                                    isMobile
-                                        ? isActive
-                                            ? "opacity-100"
-                                            : "opacity-0"
-                                        : "opacity-0 group-hover:opacity-100 group-active:opacity-100"
-                                }`}
-                            >
-                                {lines.map(
-                                    (
-                                        line: string,
-                                        i: number
-                                    ) => (
-                                        <p
-                                            key={i}
-                                            className="m-0 whitespace-nowrap text-gray-900"
-                                            style={{
-                                                letterSpacing:
-                                                    "0.04em",
-                                                lineHeight:
-                                                    "1.4em",
-                                            }}
-                                        >
-                                            {line}
-                                        </p>
-                                    )
-                                )}
-                            </div>
+                            {/* Background overlay khi hover/active */}
+                            {(isActive ||
+                                (!isMobile &&
+                                    activeBoxIndex ===
+                                        index)) && (
+                                <div
+                                    className="absolute inset-0 bg-white"
+                                    style={{ zIndex: -1 }}
+                                />
+                            )}
+
+                            {/* Text content - chỉ hiện khi hover/active */}
+                            {(shouldShowText ||
+                                (!isMobile &&
+                                    activeBoxIndex ===
+                                        index)) && (
+                                <div className="w-full h-full">
+                                    {lines.map(
+                                        (
+                                            line: string,
+                                            i: number
+                                        ) => (
+                                            <p
+                                                key={i}
+                                                className="m-0 text-black"
+                                                style={{
+                                                    display:
+                                                        "table", // Giống HTML gốc
+                                                    whiteSpace:
+                                                        "nowrap",
+                                                    letterSpacing:
+                                                        "0.1em", // Giống HTML gốc
+                                                    lineHeight:
+                                                        "1.1em",
+                                                    backgroundColor:
+                                                        "rgb(255, 255, 255)",
+                                                    fontSize:
+                                                        "inherit",
+                                                }}
+                                            >
+                                                {line}
+                                            </p>
+                                        )
+                                    )}
+                                </div>
+                            )}
                         </div>
                     );
                 }
