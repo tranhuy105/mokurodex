@@ -166,18 +166,20 @@ export function addPopStateListener(
 }
 
 /**
- * Creates a throttled function that delays execution
+ * Creates a throttled function that delays execution with cleanup capability
  */
 export function throttle<
     T extends (...args: unknown[]) => unknown
 >(
     func: T,
     delay: number
-): (...args: Parameters<T>) => void {
+): ((...args: Parameters<T>) => void) & {
+    cancel: () => void;
+} {
     let lastCall = 0;
     let timeoutId: number | null = null;
 
-    return (...args: Parameters<T>) => {
+    const throttledFunction = (...args: Parameters<T>) => {
         const now = Date.now();
         const elapsed = now - lastCall;
 
@@ -192,4 +194,14 @@ export function throttle<
             }, delay - elapsed);
         }
     };
+
+    // Add cancel method to cleanup pending calls
+    throttledFunction.cancel = () => {
+        if (timeoutId !== null) {
+            window.clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+    };
+
+    return throttledFunction;
 }

@@ -11,7 +11,7 @@ import {
     Settings2,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ImageCropper from "./ImageCropper";
 import SettingsSidebar from "./SettingsSidebar";
 
@@ -58,6 +58,13 @@ export default function MangaReader({
     showControls: externalShowControls,
     isLoading = false,
 }: Props) {
+    // Add mounted state to prevent hydration issues
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
     // Use settings hook
     const settings = useSettings();
 
@@ -87,28 +94,14 @@ export default function MangaReader({
     const {
         loadedImages,
         prefetchingImages,
-        failedImages,
         isLoaded,
         isPrefetching,
     } = usePrefetchImages(
         memoizedPages,
         initialPage,
-        15, // Increased prefetch distance like MangaDex
-        6 // Batch size for loading
+        15,
+        6
     );
-
-    console.log("Prefetch Status:", {
-        loaded: loadedImages.size,
-        prefetching: prefetchingImages.size,
-        failed: failedImages.size,
-        currentPage: initialPage,
-        currentPageLoaded: isLoaded(
-            memoizedPages[initialPage - 1]?.imagePath || ""
-        ),
-        currentPagePrefetching: isPrefetching(
-            memoizedPages[initialPage - 1]?.imagePath || ""
-        ),
-    });
 
     // Scroll to top function
     const scrollToTop = () => {
@@ -130,63 +123,59 @@ export default function MangaReader({
         | string
         | DoublePageData
         | null => {
-        if (
-            !pages.length ||
-            initialPage <= 0 ||
-            initialPage > pages.length
-        ) {
-            return null;
-        }
+            if (
+                !pages.length ||
+                initialPage <= 0 ||
+                initialPage > pages.length
+            ) {
+                return null;
+            }
 
-        // For single page mode or long strip mode, just return the current page
-        if (settings.readingMode !== "doublePage") {
-            return pages[initialPage - 1]?.imagePath || "";
-        }
+            // For single page mode or long strip mode, just return the current page
+            if (settings.readingMode !== "doublePage") {
+                return (
+                    pages[initialPage - 1]?.imagePath || ""
+                );
+            }
 
-        // For double page mode, return both images if available
-        // Use the same logic as DoublePageMode to ensure correct pages are shown
-        const adjustedCurrentPage =
-            initialPage % 2 === 0 && initialPage > 1
-                ? initialPage - 1
-                : initialPage;
+            // For double page mode, return both images if available
+            const adjustedCurrentPage =
+                initialPage % 2 === 0 && initialPage > 1
+                    ? initialPage - 1
+                    : initialPage;
 
-        const leftPageIndex = adjustedCurrentPage - 1;
-        const rightPageIndex = adjustedCurrentPage;
+            const leftPageIndex = adjustedCurrentPage - 1;
+            const rightPageIndex = adjustedCurrentPage;
 
-        const leftPage = pages[leftPageIndex];
-        const rightPage = pages[rightPageIndex];
+            const leftPage = pages[leftPageIndex];
+            const rightPage = pages[rightPageIndex];
 
-        return {
-            left: leftPage?.imagePath || null,
-            right: rightPage?.imagePath || null,
-            currentPage: adjustedCurrentPage,
+            return {
+                left: leftPage?.imagePath || null,
+                right: rightPage?.imagePath || null,
+                currentPage: adjustedCurrentPage,
+            };
         };
-    };
 
     // Handle opening the cropper
     const handleOpenCropper = () => {
         const pageImage = getCurrentPageImage();
 
         if (!pageImage) {
-            return; // No pages available
+            return;
         }
 
-        // Handle double page mode differently
         if (
             settings.readingMode === "doublePage" &&
             typeof pageImage === "object"
         ) {
-            // For double page mode, we'll default to the currently visible page
-            // If both pages are available, let the user choose in the cropper
             if (pageImage.left && pageImage.right) {
-                // Default to right page for right-to-left, left page for left-to-right
                 setPageToDisplay(
                     settings.rightToLeft
                         ? pageImage.right
                         : pageImage.left
                 );
             } else {
-                // If only one page is available, use that
                 setPageToDisplay(
                     pageImage.left ||
                         pageImage.right ||
@@ -194,7 +183,6 @@ export default function MangaReader({
                 );
             }
         } else {
-            // For single page modes, just use the current page
             setPageToDisplay(
                 typeof pageImage === "string"
                     ? pageImage
@@ -220,6 +208,15 @@ export default function MangaReader({
 
     // Render the appropriate content based on reading mode
     const renderContent = () => {
+        // During SSR or before mount, render a simple fallback to prevent hydration issues
+        if (!isMounted) {
+            return (
+                <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                    <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-orange-500"></div>
+                </div>
+            );
+        }
+
         const commonProps = {
             pages: memoizedPages,
             currentPage: initialPage,
@@ -278,43 +275,43 @@ export default function MangaReader({
                 <Settings2 size={22} />
             </button>
 
-            {/* Navigation buttons - Simple home/manga list navigation */}
-            <div
-                className={`fixed top-4 left-0 right-0 z-20 transition-opacity duration-300 flex justify-between items-center px-4 ${
-                    showControls
-                        ? "opacity-100"
-                        : "opacity-0"
-                }`}
-            >
-                {/* Left side buttons */}
-                <div className="flex items-center space-x-2">
-                    <Link
-                        href={`/content`}
-                        className="flex items-center justify-center w-10 h-10 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full shadow-lg transition-all"
-                    >
-                        <Home size={18} />
-                    </Link>
-                    <Link
-                        href={`/content/${encodeURIComponent(
-                            manga
-                        )}`}
-                        className="flex items-center justify-center w-10 h-10 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full shadow-lg transition-all"
-                    >
-                        <List size={18} />
-                    </Link>
-                    <button
-                        onClick={handleOpenCropper}
-                        className="flex items-center justify-center w-10 h-10 bg-[#fa9c34] bg-opacity-90 hover:bg-opacity-100 text-white rounded-full shadow-lg transition-all"
-                        aria-label="Open Anki Cropper"
-                    >
-                        <Layers size={18} />
-                    </button>
+            {/* Navigation buttons - only show after mount to prevent hydration issues */}
+            {isMounted && (
+                <div
+                    className={`fixed top-4 left-0 right-0 z-20 transition-opacity duration-300 flex justify-between items-center px-4 ${
+                        showControls
+                            ? "opacity-100"
+                            : "opacity-0"
+                    }`}
+                >
+                    <div className="flex items-center space-x-2">
+                        <Link
+                            href={`/content`}
+                            className="flex items-center justify-center w-10 h-10 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full shadow-lg transition-all"
+                        >
+                            <Home size={18} />
+                        </Link>
+                        <Link
+                            href={`/content/${encodeURIComponent(
+                                manga
+                            )}`}
+                            className="flex items-center justify-center w-10 h-10 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full shadow-lg transition-all"
+                        >
+                            <List size={18} />
+                        </Link>
+                        <button
+                            onClick={handleOpenCropper}
+                            className="flex items-center justify-center w-10 h-10 bg-[#fa9c34] bg-opacity-90 hover:bg-opacity-100 text-white rounded-full shadow-lg transition-all"
+                            aria-label="Open Anki Cropper"
+                        >
+                            <Layers size={18} />
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Main content */}
             <div className="flex-1 flex relative overflow-hidden no-scrollbar">
-                {/* Content area */}
                 <div
                     className="flex-1 relative h-full w-full overflow-hidden"
                     ref={containerRef}
@@ -323,26 +320,28 @@ export default function MangaReader({
                 </div>
             </div>
 
-            {/* Progress bar */}
-            <div
-                className={`transition-opacity duration-300 ${
-                    showControls
-                        ? "opacity-100"
-                        : "opacity-0"
-                }`}
-            >
-                <ProgressBar
-                    currentPage={initialPage}
-                    totalPages={actualPageCount}
-                    pages={memoizedPages}
-                    mode={settings.readingMode}
-                    loadedPages={loadedImages}
-                    prefetchedPages={prefetchingImages}
-                />
-            </div>
+            {/* Progress bar - only show after mount */}
+            {isMounted && (
+                <div
+                    className={`transition-opacity duration-300 ${
+                        showControls
+                            ? "opacity-100"
+                            : "opacity-0"
+                    }`}
+                >
+                    <ProgressBar
+                        currentPage={initialPage}
+                        totalPages={actualPageCount}
+                        pages={memoizedPages}
+                        mode={settings.readingMode}
+                        loadedPages={loadedImages}
+                        prefetchedPages={prefetchingImages}
+                    />
+                </div>
+            )}
 
-            {/* Scroll to top button - only for long strip mode */}
-            {showScrollTop && (
+            {/* Scroll to top button - only for long strip mode and after mount */}
+            {isMounted && showScrollTop && (
                 <button
                     onClick={scrollToTop}
                     className="fixed bottom-4 right-16 bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-full shadow-lg transition-all"
@@ -352,28 +351,32 @@ export default function MangaReader({
                 </button>
             )}
 
-            {/* Image Cropper with Page Selection */}
-            {isCropperOpen && pageToDisplay && (
-                <ImageCropper
-                    isOpen={isCropperOpen}
-                    onClose={() => setIsCropperOpen(false)}
-                    image={pageToDisplay}
-                    onCrop={handleCrop}
-                    doublePage={
-                        settings.readingMode ===
-                        "doublePage"
-                    }
-                    currentPages={
-                        settings.readingMode ===
-                        "doublePage"
-                            ? (getCurrentPageImage() as DoublePageData | null)
-                            : null
-                    }
-                    onChangePage={(page: string) =>
-                        setPageToDisplay(page)
-                    }
-                />
-            )}
+            {/* Image Cropper - only show after mount */}
+            {isMounted &&
+                isCropperOpen &&
+                pageToDisplay && (
+                    <ImageCropper
+                        isOpen={isCropperOpen}
+                        onClose={() =>
+                            setIsCropperOpen(false)
+                        }
+                        image={pageToDisplay}
+                        onCrop={handleCrop}
+                        doublePage={
+                            settings.readingMode ===
+                            "doublePage"
+                        }
+                        currentPages={
+                            settings.readingMode ===
+                            "doublePage"
+                                ? (getCurrentPageImage() as DoublePageData | null)
+                                : null
+                        }
+                        onChangePage={(page: string) =>
+                            setPageToDisplay(page)
+                        }
+                    />
+                )}
         </div>
     );
 }

@@ -12,6 +12,7 @@ import { Volume } from "@prisma/client";
 import {
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState,
 } from "react";
@@ -48,7 +49,9 @@ export default function MangaReaderContainer({
     const { mutate: updateReadingHistory } =
         useUpdateReadingHistory();
 
-    // Use refs to track data needed for preventing unnecessary updates
+    // Use refs to prevent rerenders and track state without causing updates
+    const currentPageRef = useRef<number>(initialPage);
+    const currentVolumeRef = useRef<Volume>(initialVolume);
     const lastSavedPosition = useRef<{
         page: number;
         volumeId: string;
@@ -56,13 +59,121 @@ export default function MangaReaderContainer({
         page: initialPage,
         volumeId: initialVolume.id,
     });
+    const isNavigatingRef = useRef<boolean>(false);
+    const pendingUpdatesRef = useRef<{
+        urlUpdate: number | null;
+        dbSave: number | null;
+    }>({
+        urlUpdate: null,
+        dbSave: null,
+    });
 
-    // Track if this is the first render to avoid double URL updates on mount
+    // Track if this is the first render
     const isFirstRender = useRef(true);
 
-    // Fetch all pages for the current volume when volume changes (if not the initial volume)
+    // Memoize the MangaReader props to prevent unnecessary rerenders
+    const readerProps = useMemo(
+        () => ({
+            manga: mangaId,
+            volume: currentVolume,
+            pages,
+            volumes,
+            initialPage: currentPage,
+            isLoading: isLoading || isPagesLoading,
+            showControls: true,
+        }),
+        [
+            mangaId,
+            currentVolume,
+            pages,
+            volumes,
+            currentPage,
+            isLoading,
+            isPagesLoading,
+        ]
+    );
+
+    // Batch URL updates using RAF + timeout
+    const scheduleUrlUpdate = useCallback(
+        (page: number, volumeNumber: number) => {
+            if (pendingUpdatesRef.current.urlUpdate) {
+                cancelAnimationFrame(
+                    pendingUpdatesRef.current.urlUpdate
+                );
+            }
+
+            pendingUpdatesRef.current.urlUpdate =
+                requestAnimationFrame(() => {
+                    // Add small delay to batch rapid updates
+                    setTimeout(() => {
+                        if (
+                            currentPageRef.current === page
+                        ) {
+                            navigateToPage(
+                                mangaId,
+                                String(volumeNumber),
+                                page,
+                                true
+                            );
+                        }
+                        pendingUpdatesRef.current.urlUpdate =
+                            null;
+                    }, 100);
+                });
+        },
+        [mangaId]
+    );
+
+    // Batch database saves using timeout
+    const scheduleDbSave = useCallback(
+        (page: number, volumeId: string) => {
+            if (!autoSavePosition) return;
+
+            if (pendingUpdatesRef.current.dbSave) {
+                clearTimeout(
+                    pendingUpdatesRef.current.dbSave
+                );
+            }
+
+            pendingUpdatesRef.current.dbSave = setTimeout(
+                () => {
+                    // Only save if position actually changed and is still current
+                    if (
+                        currentPageRef.current === page &&
+                        page >= 1 &&
+                        page <= pages.length &&
+                        (page !==
+                            lastSavedPosition.current
+                                .page ||
+                            volumeId !==
+                                lastSavedPosition.current
+                                    .volumeId)
+                    ) {
+                        lastSavedPosition.current = {
+                            page,
+                            volumeId,
+                        };
+                        updateReadingHistory({
+                            contentId: mangaId,
+                            volumeId,
+                            position: page,
+                        });
+                    }
+                    pendingUpdatesRef.current.dbSave = null;
+                },
+                300
+            );
+        },
+        [
+            autoSavePosition,
+            mangaId,
+            pages.length,
+            updateReadingHistory,
+        ]
+    );
+
+    // Fetch pages effect - only when volume actually changes
     useEffect(() => {
-        // Skip fetching for initial volume since we already have the pages
         if (
             currentVolume.id === initialVolume.id &&
             initialPages?.length > 0
@@ -96,87 +207,50 @@ export default function MangaReaderContainer({
         fetchPages();
     }, [currentVolume.id, initialVolume.id, initialPages]);
 
-    // Save reading position to database - simplified version
-    const saveReadingPosition = useCallback(
-        (page: number, volumeId: string) => {
-            // Skip if auto-save is disabled
-            if (!autoSavePosition) return;
-
-            // Only save when:
-            // 1. It's a different position than last saved
-            // 2. It's a valid page number
-            if (
-                page >= 1 &&
-                page <= pages.length &&
-                (page !== lastSavedPosition.current.page ||
-                    volumeId !==
-                        lastSavedPosition.current.volumeId)
-            ) {
-                // Update last saved position immediately
-                lastSavedPosition.current = {
-                    page,
-                    volumeId,
-                };
-
-                // Fire and forget - no callbacks, no waiting
-                updateReadingHistory({
-                    contentId: mangaId,
-                    volumeId,
-                    position: page,
-                });
-            }
-        },
-        [
-            mangaId,
-            autoSavePosition,
-            pages.length,
-            updateReadingHistory,
-        ]
-    );
-
-    // Handle page change - simplified version
+    // Handle page change - MINIMAL state updates
     const handlePageChange = useCallback(
         (newPage: number) => {
-            // Skip invalid page numbers
+            // Skip invalid page numbers or same page
             if (
                 newPage < 1 ||
                 (pages.length > 0 &&
                     newPage > pages.length) ||
-                newPage === currentPage
+                newPage === currentPageRef.current ||
+                isNavigatingRef.current
             ) {
                 return;
             }
 
-            // Update state first for immediate feedback
-            setCurrentPage(newPage);
+            // Prevent rapid navigation
+            isNavigatingRef.current = true;
 
-            // Update URL using history API - no debouncing
-            navigateToPage(
-                mangaId,
-                String(currentVolume.volumeNumber),
+            // Update refs immediately (no rerender)
+            currentPageRef.current = newPage;
+
+            // Update state in next tick to batch with other updates
+            Promise.resolve().then(() => {
+                setCurrentPage(newPage);
+                isNavigatingRef.current = false;
+            });
+
+            // Schedule async updates
+            scheduleUrlUpdate(
                 newPage,
-                true
+                currentVolumeRef.current.volumeNumber
             );
-
-            // Save reading position directly
-            saveReadingPosition(newPage, currentVolume.id);
+            scheduleDbSave(
+                newPage,
+                currentVolumeRef.current.id
+            );
         },
-        [
-            currentPage,
-            pages.length,
-            mangaId,
-            currentVolume,
-            saveReadingPosition,
-        ]
+        [pages.length, scheduleUrlUpdate, scheduleDbSave]
     );
 
-    // Handle volume change - simplified version
+    // Handle volume change
     const handleVolumeChange = useCallback(
         (volumeId: string, pageNum: number = 1) => {
-            // Find the volume by id or volumeNumber
             let newVolume: Volume | undefined;
 
-            // Try to parse as number first (might be volumeNumber)
             const volumeNumber = parseInt(volumeId, 10);
             if (!isNaN(volumeNumber)) {
                 newVolume = volumes.find(
@@ -184,7 +258,6 @@ export default function MangaReaderContainer({
                 );
             }
 
-            // If not found, try as direct id
             if (!newVolume) {
                 newVolume = volumes.find(
                     (v) => v.id === volumeId
@@ -193,21 +266,35 @@ export default function MangaReaderContainer({
 
             if (
                 !newVolume ||
-                newVolume.id === currentVolume.id
+                newVolume.id === currentVolumeRef.current.id
             ) {
-                return; // Skip if invalid or same volume
+                return;
             }
 
-            // Set loading state
+            // Cancel any pending updates for the old volume
+            if (pendingUpdatesRef.current.urlUpdate) {
+                cancelAnimationFrame(
+                    pendingUpdatesRef.current.urlUpdate
+                );
+                pendingUpdatesRef.current.urlUpdate = null;
+            }
+            if (pendingUpdatesRef.current.dbSave) {
+                clearTimeout(
+                    pendingUpdatesRef.current.dbSave
+                );
+                pendingUpdatesRef.current.dbSave = null;
+            }
+
+            // Update refs
+            currentVolumeRef.current = newVolume;
+            currentPageRef.current = pageNum;
+
+            // Update state
             setIsLoading(true);
-
-            // Update the volume state
             setCurrentVolume(newVolume);
-
-            // Reset to specified page for the new volume
             setCurrentPage(pageNum);
 
-            // Update URL
+            // Update URL immediately for volume changes
             navigateToPage(
                 mangaId,
                 String(newVolume.volumeNumber),
@@ -215,49 +302,80 @@ export default function MangaReaderContainer({
                 false
             );
 
-            // Save initial position in the new volume
-            saveReadingPosition(pageNum, newVolume.id);
+            // Save position immediately for volume changes
+            if (autoSavePosition) {
+                lastSavedPosition.current = {
+                    page: pageNum,
+                    volumeId: newVolume.id,
+                };
+                updateReadingHistory({
+                    contentId: mangaId,
+                    volumeId: newVolume.id,
+                    position: pageNum,
+                });
+            }
 
-            // Clear loading state after a short delay to allow volume to load
             setTimeout(() => setIsLoading(false), 300);
         },
         [
-            currentVolume.id,
             volumes,
             mangaId,
-            saveReadingPosition,
+            autoSavePosition,
+            updateReadingHistory,
         ]
     );
 
-    // Save initial reading position on first render
+    // Initialize refs and save initial position
     useEffect(() => {
         if (isFirstRender.current) {
             isFirstRender.current = false;
-            saveReadingPosition(
-                initialPage,
-                initialVolume.id
-            );
+            currentPageRef.current = initialPage;
+            currentVolumeRef.current = initialVolume;
+
+            if (autoSavePosition) {
+                lastSavedPosition.current = {
+                    page: initialPage,
+                    volumeId: initialVolume.id,
+                };
+                updateReadingHistory({
+                    contentId: mangaId,
+                    volumeId: initialVolume.id,
+                    position: initialPage,
+                });
+            }
         }
     }, [
         initialPage,
         initialVolume.id,
-        saveReadingPosition,
+        mangaId,
+        autoSavePosition,
+        updateReadingHistory,
+        initialVolume,
     ]);
 
-    // Main render method
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (pendingUpdatesRef.current.urlUpdate) {
+                cancelAnimationFrame(
+                    pendingUpdatesRef.current.urlUpdate
+                );
+            }
+            if (pendingUpdatesRef.current.dbSave) {
+                clearTimeout(
+                    pendingUpdatesRef.current.dbSave
+                );
+            }
+        };
+    }, []);
+
     return (
         <div className="flex flex-col min-h-screen">
             <div className="flex-grow">
                 <MangaReader
-                    manga={mangaId}
-                    volume={currentVolume}
-                    pages={pages}
-                    volumes={volumes}
-                    initialPage={currentPage}
+                    {...readerProps}
                     onPageChange={handlePageChange}
                     onVolumeChange={handleVolumeChange}
-                    isLoading={isLoading || isPagesLoading}
-                    showControls={true}
                 />
             </div>
 

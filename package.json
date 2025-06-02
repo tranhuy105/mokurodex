@@ -8,7 +8,8 @@
         "build": "prisma generate && next build",
         "start": "next start",
         "lint": "next lint",
-        "proxy": "start ./nginx/nginx.exe"
+        "proxy": "start ./nginx/nginx.exe",
+        "clean": "rimraf .next .turbo"
     },
     "dependencies": {
         "@prisma/client": "^6.8.2",
@@ -71,6 +72,7 @@
         "@types/xml2js": "^0.4.14",
         "eslint": "^9",
         "eslint-config-next": "15.3.2",
+        "rimraf": "^6.0.1",
         "tailwindcss": "^4",
         "tw-animate-css": "^1.2.9",
         "typescript": "^5"
