@@ -664,7 +664,9 @@ async function extractToc(
         // Assume it's NCX format
         return await extractNcxToc(
             tocContent,
-            basePathPrefix
+            basePathPrefix,
+            manifestMap,
+            epubZip
         );
     }
 }
@@ -674,7 +676,9 @@ async function extractToc(
  */
 async function extractNcxToc(
     ncxContent: string,
-    basePathPrefix: string
+    basePathPrefix: string,
+    manifestMap: Record<string, ManifestItem>,
+    epubZip: JSZip
 ): Promise<TocItem[]> {
     try {
         const ncxData = await parseStringPromise(
@@ -694,10 +698,12 @@ async function extractNcxToc(
         }
 
         const navPoints = processNavPoints(navMap.navPoint);
-        return navPointsToTocItems(
+        return await navPointsToTocItems(
             navPoints,
             basePathPrefix,
-            0
+            0,
+            manifestMap,
+            epubZip
         );
     } catch (error) {
         console.error("Error parsing NCX:", error);
@@ -934,82 +940,218 @@ function extractPlayOrder(
 /**
  * Convert NavPoints to TocItems with position calculation
  */
-function navPointsToTocItems(
+async function navPointsToTocItems(
     navPoints: NavPoint[],
     basePathPrefix: string,
-    level: number
-): TocItem[] {
-    return navPoints.map((navPoint, index) => {
-        // Extract the fragment identifier if present
-        let href = navPoint.href;
-        let fragment = "";
+    level: number,
+    manifestMap: Record<string, ManifestItem>,
+    epubZip?: JSZip
+): Promise<TocItem[]> {
+    // First, let's estimate chapter sizes if possible
+    let totalSize = 0;
+    const navPointSizes: number[] = [];
+    let hasAccurateSizes = false;
 
-        if (href.includes("#")) {
-            const parts = href.split("#");
-            href = parts[0];
-            fragment = parts[1];
+    // Try to get file sizes for more accurate position calculation
+    if (epubZip && Object.keys(manifestMap).length > 0) {
+        try {
+            // Calculate estimated sizes based on file content lengths
+            for (const navPoint of navPoints) {
+                let size = 1; // Default minimum size
+
+                // Extract the file path from href
+                const href = navPoint.href.split("#")[0];
+
+                // Find the file in the zip
+                if (href) {
+                    // Try different possible paths to find the file
+                    const possiblePaths = [
+                        href,
+                        `${basePathPrefix}${href}`,
+                        href.replace(/^\//, ""),
+                        `OEBPS/${href}`,
+                    ];
+
+                    let fileContent: Promise<string> | null =
+                        null;
+                    for (const path of possiblePaths) {
+                        const file = epubZip.file(path);
+                        if (file) {
+                            try {
+                                fileContent =
+                                    file.async("string");
+                                break;
+                            } catch (e: unknown) {
+                                const error =
+                                    e instanceof Error
+                                        ? e
+                                        : new Error(
+                                              String(e)
+                                          );
+                                console.error(
+                                    `Error reading file ${path}:`,
+                                    error
+                                );
+                            }
+                        }
+                    }
+
+                    if (fileContent) {
+                        // Use content length as a size approximation
+                        const content = await fileContent;
+                        size = content.length;
+                        hasAccurateSizes = true;
+                    }
+                }
+
+                navPointSizes.push(size);
+                totalSize += size;
+            }
+        } catch (error: unknown) {
+            const err =
+                error instanceof Error
+                    ? error
+                    : new Error(String(error));
+            console.warn(
+                "Error calculating chapter sizes:",
+                err
+            );
+            // Fall back to index-based positioning
+            hasAccurateSizes = false;
         }
+    }
 
-        // Resolve relative paths if needed
-        if (href.startsWith("../")) {
-            // Get the path components
-            const parts = href.split("/");
-            const fileName = parts.pop() || "";
+    // If we couldn't get accurate sizes, use fallback method with weighted positions
+    if (!hasAccurateSizes) {
+        // Use weighted positions based on index but with exponential weighting
+        // to simulate varying chapter lengths
+        totalSize = 0;
+        navPointSizes.length = 0;
 
-            // Count how many levels up we need to go
-            let upCount = 0;
-            for (const part of parts) {
-                if (part === "..") upCount++;
+        for (let i = 0; i < navPoints.length; i++) {
+            // Create varied sizes using a weighted random distribution
+            // Lower indices (front matter) tend to be smaller, middle chapters bigger
+            let weight = 1;
+
+            if (i === 0) {
+                // First item (often copyright/title) is small
+                weight = 0.5;
+            } else if (i < navPoints.length * 0.1) {
+                // Front matter (first 10% of items) is smaller
+                weight = 0.7;
+            } else if (i > navPoints.length * 0.9) {
+                // Back matter (last 10% of items) is smaller
+                weight = 0.8;
+            } else {
+                // Middle chapters vary in size
+                // Create a bell curve peaking in the middle
+                const normalizedPos = i / navPoints.length;
+                weight =
+                    1 +
+                    Math.sin(normalizedPos * Math.PI) * 0.5;
             }
 
-            // Get base directory parts
-            const basePathParts = basePathPrefix
-                .split("/")
-                .filter((p) => p);
-
-            // Go up the required number of levels
-            const newBasePath = basePathParts.slice(
-                0,
-                Math.max(0, basePathParts.length - upCount)
+            const size = Math.max(
+                1,
+                Math.round(weight * 10)
             );
-
-            // Remove all '../' parts from the path
-            const remainingParts = parts.filter(
-                (p) => p !== ".."
-            );
-
-            // Construct the resolved path
-            href = [
-                ...newBasePath,
-                ...remainingParts,
-                fileName,
-            ].join("/");
+            navPointSizes.push(size);
+            totalSize += size;
         }
+    }
 
-        // Calculate approximate position (will be refined later)
-        const position =
-            (index / (navPoints.length || 1)) * 100;
+    // Now calculate positions based on sizes
+    let runningPercentage = 0;
 
-        const tocItem: TocItem = {
-            id: navPoint.id,
-            title: navPoint.label,
-            href: href + (fragment ? `#${fragment}` : ""),
-            level,
-            position,
-        };
+    const tocItems = await Promise.all(
+        navPoints.map(async (navPoint, index) => {
+            // Extract the fragment identifier if present
+            let href = navPoint.href;
+            let fragment = "";
 
-        // Process children if present
-        if (
-            navPoint.children &&
-            navPoint.children.length > 0
-        ) {
-            tocItem.children = navPointsToTocItems(
-                navPoint.children,
-                basePathPrefix,
-                level + 1
+            if (href.includes("#")) {
+                const parts = href.split("#");
+                href = parts[0];
+                fragment = parts[1];
+            }
+
+            // Resolve relative paths if needed
+            if (href.startsWith("../")) {
+                // Get the path components
+                const parts = href.split("/");
+                const fileName = parts.pop() || "";
+
+                // Count how many levels up we need to go
+                let upCount = 0;
+                for (const part of parts) {
+                    if (part === "..") upCount++;
+                }
+
+                // Get base directory parts
+                const basePathParts = basePathPrefix
+                    .split("/")
+                    .filter((p) => p);
+
+                // Go up the required number of levels
+                const newBasePath = basePathParts.slice(
+                    0,
+                    Math.max(
+                        0,
+                        basePathParts.length - upCount
+                    )
+                );
+
+                // Remove all '../' parts from the path
+                const remainingParts = parts.filter(
+                    (p) => p !== ".."
+                );
+
+                // Construct the resolved path
+                href = [
+                    ...newBasePath,
+                    ...remainingParts,
+                    fileName,
+                ].join("/");
+            }
+
+            // Calculate position based on chapter size
+            const sizePercentage =
+                (navPointSizes[index] / totalSize) * 100;
+            const position = Math.min(
+                100,
+                runningPercentage
             );
-        }
 
-        return tocItem;
-    });
+            // Update running percentage for next item
+            runningPercentage += sizePercentage;
+
+            const tocItem: TocItem = {
+                id: navPoint.id,
+                title: navPoint.label,
+                href:
+                    href + (fragment ? `#${fragment}` : ""),
+                level,
+                position,
+            };
+
+            // Process children if present
+            if (
+                navPoint.children &&
+                navPoint.children.length > 0
+            ) {
+                tocItem.children =
+                    await navPointsToTocItems(
+                        navPoint.children,
+                        basePathPrefix,
+                        level + 1,
+                        manifestMap,
+                        epubZip
+                    );
+            }
+
+            return tocItem;
+        })
+    );
+
+    return tocItems;
 }

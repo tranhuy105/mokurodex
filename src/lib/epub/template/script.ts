@@ -1,11 +1,4 @@
-export const getScript = (
-    initialPosition: number,
-    chapters: Array<{
-        title: string;
-        startPercentage: number;
-        endPercentage: number;
-    }> = []
-) => {
+export const getScript = (initialPosition: number) => {
     return `<script>
                 // Function to restore position
                 function restorePosition(position) {
@@ -28,6 +21,12 @@ export const getScript = (
                             progressBar.style.width = '${initialPosition}%';
                         }
                         
+                        // Update progress tooltip
+                        const progressTooltip = document.getElementById('progress-tooltip');
+                        if (progressTooltip) {
+                            progressTooltip.textContent = Math.round(${initialPosition}) + '%';
+                        }
+                        
                         // Update progress handle
                         const progressHandle = document.getElementById('progress-handle');
                         if (progressHandle) {
@@ -38,90 +37,134 @@ export const getScript = (
                         updateProgressInfo(${initialPosition});
                     }
                     
-                    // Chapter data from props
-                    const chaptersData = ${JSON.stringify(
-                        chapters
-                    )};
-                    
-                    // Function to create chapter markers
-                    function createChapterMarkers() {
-                        const progressChapters = document.getElementById('progress-chapters');
-                        if (!progressChapters || chaptersData.length === 0) return;
-                        
-                        // Clear existing markers
-                        progressChapters.innerHTML = '';
-                        
-                        // Create markers for each chapter boundary (except first one at 0%)
-                        chaptersData.forEach((chapter, index) => {
-                            if (index === 0) return; // Skip first chapter start
-                            
-                            const marker = document.createElement('div');
-                            marker.classList.add('chapter-marker');
-                            marker.style.left = chapter.startPercentage + '%';
-                            marker.setAttribute('data-title', chapter.title);
-                            progressChapters.appendChild(marker);
-                        });
-                    }
-                    
-                    // Function to get current chapter info based on position
-                    function getCurrentChapterInfo(bookPercentage) {
-                        if (chaptersData.length === 0) {
-                            return { 
-                                chapterPercentage: bookPercentage, 
-                                chapterRemaining: Math.max(0, 100 - bookPercentage),
-                                chapterTitle: 'Chapter'
-                            };
-                        }
-                        
-                        // Find current chapter
-                        let currentChapter = null;
-                        for (let i = 0; i < chaptersData.length; i++) {
-                            const chapter = chaptersData[i];
-                            if (bookPercentage >= chapter.startPercentage && bookPercentage <= chapter.endPercentage) {
-                                currentChapter = chapter;
-                                break;
-                            }
-                        }
-                        
-                        // If no chapter found, use the last one
-                        if (!currentChapter && chaptersData.length > 0) {
-                            currentChapter = chaptersData[chaptersData.length - 1];
-                        }
-                        
-                        if (currentChapter) {
-                            const chapterLength = currentChapter.endPercentage - currentChapter.startPercentage;
-                            const positionInChapter = bookPercentage - currentChapter.startPercentage;
-                            const chapterPercentage = Math.min(100, Math.max(0, (positionInChapter / chapterLength) * 100));
-                            const chapterRemaining = Math.max(0, 100 - chapterPercentage);
-                            
-                            return {
-                                chapterPercentage: Math.round(chapterPercentage),
-                                chapterRemaining: Math.round(chapterRemaining),
-                                chapterTitle: currentChapter.title
-                            };
-                        }
-                        
-                        return { 
-                            chapterPercentage: Math.round(bookPercentage), 
-                            chapterRemaining: Math.max(0, Math.round(100 - bookPercentage)),
-                            chapterTitle: 'Chapter'
-                        };
-                    }
-                    
                     // Function to update both chapter and book progress info
                     function updateProgressInfo(bookPercentage) {
+                        // Get chapter progress (this is a mock - you'll need to implement actual chapter tracking)
+                        // For now, we'll simulate chapter progress based on book progress and current chapter bounds
                         const chapterProgress = document.getElementById('chapter-progress');
                         const bookProgress = document.getElementById('book-progress');
                         
                         if (chapterProgress && bookProgress) {
-                            const chapterInfo = getCurrentChapterInfo(bookPercentage);
+                            // Calculate chapter percentage (mock calculation - replace with actual logic)
+                            // This assumes we know the start and end percentages of the current chapter
+                            const currentChapterStart = getCurrentChapterStart();
+                            const currentChapterEnd = getCurrentChapterEnd();
                             
-                            // Update chapter progress
-                            chapterProgress.textContent = chapterInfo.chapterRemaining + '% left';
+                            if (currentChapterStart !== null && currentChapterEnd !== null) {
+                                const chapterLength = currentChapterEnd - currentChapterStart;
+                                const positionInChapter = bookPercentage - currentChapterStart;
+                                const chapterPercentage = Math.round((positionInChapter / chapterLength) * 100);
+                                const chapterRemaining = Math.max(0, 100 - chapterPercentage);
+                                
+                                chapterProgress.textContent = chapterRemaining + '% left';
+                            } else {
+                                chapterProgress.textContent = 'Unknown';
+                            }
                             
                             // Update book progress
                             bookProgress.textContent = Math.round(bookPercentage) + '%';
                         }
+                        
+                        // Make sure the progress info is shown when dragging
+                        const progressInfo = document.getElementById('progress-info');
+                        if (progressInfo) {
+                            progressInfo.classList.add('active');
+                            
+                            // Keep it visible for 2 seconds after last update
+                            // @ts-ignore - Add global timeout reference
+                            if (window.progressInfoTimeout) {
+                                // @ts-ignore
+                                clearTimeout(window.progressInfoTimeout);
+                            }
+                            
+                            // @ts-ignore
+                            window.progressInfoTimeout = setTimeout(function() {
+                                progressInfo.classList.remove('active');
+                            }, 2000);
+                        }
+                    }
+                    
+                    // Function to get current chapter start percentage based on TOC
+                    function getCurrentChapterStart() {
+                        // Try to get chapter information from TOC data and current position
+                        try {
+                            const tocDataMeta = document.querySelector('meta[name="toc-data"]');
+                            if (tocDataMeta && tocDataMeta.getAttribute('content')) {
+                                const tocItems = JSON.parse(tocDataMeta.getAttribute('content') || '[]');
+                                if (!tocItems || tocItems.length === 0) return 0;
+                                
+                                // Get current position
+                                const progressBar = document.getElementById('progress-bar');
+                                const currentPosition = progressBar ? 
+                                    parseFloat(progressBar.style.width) || 0 : 0;
+                                
+                                // Filter to top-level items and sort by position
+                                const chapters = tocItems
+                                    .filter(item => item.level === 0)
+                                    .sort((a, b) => a.position - b.position);
+                                
+                                // Find current chapter (the last chapter whose position is <= current position)
+                                let currentChapter = chapters[0];
+                                for (let i = 0; i < chapters.length; i++) {
+                                    if (chapters[i].position <= currentPosition) {
+                                        currentChapter = chapters[i];
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                
+                                return currentChapter.position;
+                            }
+                        } catch (err) {
+                            console.error('Error getting chapter start:', err);
+                        }
+                        
+                        // Fallback to mock value
+                        return 60;
+                    }
+                    
+                    // Function to get current chapter end percentage based on TOC
+                    function getCurrentChapterEnd() {
+                        // Try to get chapter information from TOC data and current position
+                        try {
+                            const tocDataMeta = document.querySelector('meta[name="toc-data"]');
+                            if (tocDataMeta && tocDataMeta.getAttribute('content')) {
+                                const tocItems = JSON.parse(tocDataMeta.getAttribute('content') || '[]');
+                                if (!tocItems || tocItems.length === 0) return 100;
+                                
+                                // Get current position
+                                const progressBar = document.getElementById('progress-bar');
+                                const currentPosition = progressBar ? 
+                                    parseFloat(progressBar.style.width) || 0 : 0;
+                                
+                                // Filter to top-level items and sort by position
+                                const chapters = tocItems
+                                    .filter(item => item.level === 0)
+                                    .sort((a, b) => a.position - b.position);
+                                
+                                // Find current chapter (the last chapter whose position is <= current position)
+                                let currentChapterIndex = 0;
+                                for (let i = 0; i < chapters.length; i++) {
+                                    if (chapters[i].position <= currentPosition) {
+                                        currentChapterIndex = i;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                
+                                // Get the end position (either next chapter or 100%)
+                                if (currentChapterIndex < chapters.length - 1) {
+                                    return chapters[currentChapterIndex + 1].position;
+                                } else {
+                                    return 100;
+                                }
+                            }
+                        } catch (err) {
+                            console.error('Error getting chapter end:', err);
+                        }
+                        
+                        // Fallback to mock value
+                        return 85;
                     }
                     
                     // Try multiple times with increasing delays to ensure content is fully loaded
@@ -141,9 +184,6 @@ export const getScript = (
                         
                         // Content has height, restore position
                         restorePosition(${initialPosition});
-                        
-                        // Create chapter markers
-                        createChapterMarkers();
                         
                         // Double-check position after a short delay
                         setTimeout(() => {
@@ -199,6 +239,7 @@ export const getScript = (
                         const progressInfo = document.getElementById('progress-info');
                         const progressContainer = document.getElementById('progress-container');
                         const progressHandle = document.getElementById('progress-handle');
+                        const progressTooltip = document.getElementById('progress-tooltip');
                         
                         if (readerContent) {
                             let scrollTimeout;
@@ -222,6 +263,11 @@ export const getScript = (
                                 // Update handle position
                                 if (progressHandle) {
                                     progressHandle.style.left = percentage + '%';
+                                }
+                                
+                                // Update tooltip
+                                if (progressTooltip) {
+                                    progressTooltip.textContent = percentage + '%';
                                 }
                                 
                                 // Update progress info with both chapter and book percentages
@@ -347,6 +393,11 @@ export const getScript = (
                                     progressHandle.style.left = percentage + '%';
                                 }
                                 
+                                // Update tooltip
+                                if (progressTooltip) {
+                                    progressTooltip.textContent = Math.round(percentage) + '%';
+                                }
+                                
                                 // Update progress info with both chapter and book percentages
                                 updateProgressInfo(percentage);
                                 
@@ -378,20 +429,17 @@ export const getScript = (
                             // Add hover effect for progress bar
                             progressContainer.addEventListener('mouseenter', function() {
                                 // Add a slight pulse animation to the handle when hovering
-                                const handleCircle = progressHandle.querySelector('.handle-circle');
-                                if (handleCircle) {
-                                    handleCircle.classList.add('pulse');
-                                }
+                                progressHandle.querySelector('.handle-circle').classList.add('pulse');
                             });
                             
                             progressContainer.addEventListener('mouseleave', function() {
                                 // Remove pulse animation when mouse leaves
-                                const handleCircle = progressHandle.querySelector('.handle-circle');
-                                if (handleCircle) {
-                                    handleCircle.classList.remove('pulse');
-                                }
+                                progressHandle.querySelector('.handle-circle').classList.remove('pulse');
                             });
                         }
+                        
+                        // Initialize chapter markers based on actual chapter lengths from TOC
+                        initializeChapterMarkers();
                         
                         // Apply the viewport lock again after a delay
                         setTimeout(lockViewport, 100);
@@ -399,6 +447,87 @@ export const getScript = (
                         // Start the restoration process
                         setTimeout(() => attemptRestore(), 50);
                     });
+
+                    // Initialize chapter markers based on actual chapter lengths from TOC
+                    function initializeChapterMarkers() {
+                        const progressChapters = document.getElementById('progress-chapters');
+                        if (!progressChapters) return;
+                        
+                        // Clear existing markers
+                        progressChapters.innerHTML = '';
+                        
+                        // Try to get TOC data from meta tag
+                        const tocDataMeta = document.querySelector('meta[name="toc-data"]');
+                        
+                        if (tocDataMeta && tocDataMeta.getAttribute('content')) {
+                            try {
+                                const tocItems = JSON.parse(tocDataMeta.getAttribute('content') || '[]');
+                                
+                                // Only use top-level items for markers to avoid clutter
+                                const topLevelItems = tocItems.filter(item => item.level === 0);
+                                
+                                if (topLevelItems.length > 0) {
+                                    // Add chapter markers based on their actual positions
+                                    topLevelItems.forEach((item, index) => {
+                                        const marker = document.createElement('div');
+                                        marker.className = 'chapter-marker';
+                                        
+                                        // Position marker based on chapter's actual position in the book
+                                        marker.style.left = item.position + '%';
+                                        
+                                        // Add title as data attribute for hover tooltip
+                                        marker.setAttribute('data-title', item.title || 'Chapter ' + (index + 1));
+                                        
+                                        progressChapters.appendChild(marker);
+                                    });
+                                    
+                                    console.log('Added ' + topLevelItems.length + ' chapter markers based on TOC data');
+                                    return;
+                                }
+                            } catch (err) {
+                                console.error('Failed to parse TOC data for chapter markers:', err);
+                            }
+                        }
+                        
+                        // Fallback: find chapters in the document and estimate their positions
+                        const chapters = document.querySelectorAll('.chapter');
+                        if (chapters.length > 0) {
+                            const readerContent = document.getElementById('reader-content');
+                            if (!readerContent) return;
+                            
+                            const totalHeight = readerContent.scrollHeight;
+                            
+                            // Create array to hold chapter position data
+                            const chapterPositions = [];
+                            
+                            // Calculate each chapter's position based on its offset in the document
+                            Array.from(chapters).forEach((chapter, index) => {
+                                const rect = chapter.getBoundingClientRect();
+                                const chapterOffset = rect.top + readerContent.scrollTop;
+                                const percentage = (chapterOffset / totalHeight) * 100;
+                                
+                                // Get chapter title from heading or use default
+                                const heading = chapter.querySelector('h1, h2, h3, h4') || {};
+                                const title = heading.textContent || 'Chapter ' + (index + 1);
+                                
+                                chapterPositions.push({
+                                    position: percentage,
+                                    title: title
+                                });
+                            });
+                            
+                            // Add markers for each chapter
+                            chapterPositions.forEach(chapter => {
+                                const marker = document.createElement('div');
+                                marker.className = 'chapter-marker';
+                                marker.style.left = chapter.position + '%';
+                                marker.setAttribute('data-title', chapter.title);
+                                progressChapters.appendChild(marker);
+                            });
+                            
+                            console.log('Added ' + chapterPositions.length + ' chapter markers based on document structure');
+                        }
+                    }
 
                     // Also lock viewport immediately on load to prevent flickering
                     (function() {

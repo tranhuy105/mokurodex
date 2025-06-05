@@ -278,6 +278,33 @@ export const readerStyles = `<style>
                 background-color: var(--primary-color);
             }
 
+            /* Progress tooltip */
+            .progress-tooltip {
+                position: absolute;
+                top: 100%;
+                left: 50%;
+                transform: translateX(-50%);
+                background-color: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 3px 6px;
+                border-radius: 4px;
+                font-size: 12px;
+                white-space: nowrap;
+                margin-top: 8px;
+                opacity: 0;
+                transition: opacity 0.2s ease, transform 0.3s var(--bounce-timing);
+                pointer-events: none;
+                font-weight: 500;
+                z-index: 102;
+            }
+            
+            .reader-progress-container:hover .progress-tooltip,
+            .reader-progress-container:active .progress-tooltip,
+            .reader-progress-container.dragging .progress-tooltip {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+
             /* Progress info - Enhanced for dual percentage display */
             .reader-progress-info {
                 position: absolute;

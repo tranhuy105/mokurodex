@@ -415,6 +415,92 @@ export function EpubReader({
 
                 if (signal.aborted) return;
 
+                // Calculate chapter sizes if TOC is available
+                let tocWithAccuratePositions =
+                    parsedEpub.toc || [];
+                if (
+                    parsedEpub.toc &&
+                    parsedEpub.toc.length > 0 &&
+                    parsedEpub.manifestMap
+                ) {
+                    // Map chapters to their content length for more accurate positioning
+                    const chapterSizes = new Map<
+                        string,
+                        number
+                    >();
+
+                    // Get chapter sizes based on content length
+                    for (const chapter of parsedEpub.chapters) {
+                        chapterSizes.set(
+                            chapter.id,
+                            chapter.content?.length || 0
+                        );
+                    }
+
+                    // Calculate total content size
+                    const totalContentSize = Array.from(
+                        chapterSizes.values()
+                    ).reduce((sum, size) => sum + size, 0);
+
+                    // Update TOC positions based on actual chapter sizes
+                    if (totalContentSize > 0) {
+                        let runningPercentage = 0;
+
+                        // Sort TOC items by their current position to maintain order
+                        const sortedTopItems = [
+                            ...parsedEpub.toc,
+                        ]
+                            .filter(
+                                (item) => item.level === 0
+                            )
+                            .sort(
+                                (a, b) =>
+                                    a.position - b.position
+                            );
+
+                        // Update positions based on chapter sizes
+                        for (const item of sortedTopItems) {
+                            // Find corresponding chapter by href
+                            const manifestMap =
+                                parsedEpub.manifestMap!;
+                            const chapterId = Object.keys(
+                                manifestMap
+                            ).find((id) => {
+                                const manifestItem =
+                                    manifestMap[id];
+                                return item.href.includes(
+                                    manifestItem.href
+                                );
+                            });
+
+                            if (
+                                chapterId &&
+                                chapterSizes.has(chapterId)
+                            ) {
+                                // Set position to current running percentage
+                                item.position = Math.min(
+                                    100,
+                                    runningPercentage
+                                );
+
+                                // Update running percentage
+                                const chapterSize =
+                                    chapterSizes.get(
+                                        chapterId
+                                    ) || 0;
+                                runningPercentage +=
+                                    (chapterSize /
+                                        totalContentSize) *
+                                    100;
+                            }
+                        }
+
+                        // Update the TOC reference
+                        tocWithAccuratePositions =
+                            parsedEpub.toc;
+                    }
+                }
+
                 // Add spine data for dynamic loading
                 const bodyContent = `<meta name="spine-data" content='${JSON.stringify(
                     parsedEpub.spine
@@ -432,7 +518,7 @@ export function EpubReader({
                         bodyContent,
                         signal,
                         initialPosition,
-                        parsedEpub.toc || []
+                        tocWithAccuratePositions
                     );
 
                 // Set the processed content

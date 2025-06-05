@@ -23,6 +23,7 @@ export const readerUIfromContent = (content: string) => {
         <div class="reader-progress-chapters" id="progress-chapters"></div>
         <div class="reader-progress-handle" id="progress-handle">
             <div class="handle-circle"></div>
+            <div class="progress-tooltip" id="progress-tooltip">0%</div>
         </div>
     </div>
     <div class="reader-content" id="reader-content">
@@ -38,7 +39,7 @@ export const readerUIfromContent = (content: string) => {
     <div class="reader-progress-info" id="progress-info">
         <div class="progress-info-chapter">
             <span class="progress-info-label">Chapter:</span>
-            <span class="progress-info-value" id="chapter-progress">62% left</span>
+            <span class="progress-info-value" id="chapter-progress">50% left</span>
         </div>
         <div class="progress-info-book">
             <span class="progress-info-label">Book:</span>

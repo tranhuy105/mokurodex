@@ -243,6 +243,14 @@ export function ContentRenderer({
         const progressHandle = document.getElementById(
             "progress-handle"
         );
+        const progressTooltip = document.getElementById(
+            "progress-tooltip"
+        );
+        const bookProgress =
+            document.getElementById("book-progress");
+        const chapterProgress = document.getElementById(
+            "chapter-progress"
+        );
 
         if (!readerContent || !progressBar) return;
 
@@ -260,7 +268,7 @@ export function ContentRenderer({
             )
         );
 
-        // Update progress bar without state updates
+        // Update progress bar
         progressBar.style.width = `${percentage}%`;
 
         // Update progress handle position
@@ -268,14 +276,115 @@ export function ContentRenderer({
             progressHandle.style.left = `${percentage}%`;
         }
 
+        // Update tooltip
+        if (progressTooltip instanceof HTMLElement) {
+            progressTooltip.textContent = `${percentage}%`;
+        }
+
+        // Update book progress in the info panel
+        if (bookProgress instanceof HTMLElement) {
+            bookProgress.textContent = `${percentage}%`;
+        }
+
+        // Find current chapter and update chapter progress
+        if (chapterProgress instanceof HTMLElement) {
+            try {
+                // Use the same logic as in script.ts to calculate chapter percentage
+                const tocDataMeta = document.querySelector(
+                    'meta[name="toc-data"]'
+                );
+                if (
+                    tocDataMeta &&
+                    tocDataMeta.getAttribute("content")
+                ) {
+                    const tocItems = JSON.parse(
+                        tocDataMeta.getAttribute(
+                            "content"
+                        ) || "[]"
+                    );
+                    if (tocItems && tocItems.length > 0) {
+                        // Filter to top-level items and sort by position
+                        const chapters = tocItems
+                            .filter(
+                                (item: { level: number }) =>
+                                    item.level === 0
+                            )
+                            .sort(
+                                (
+                                    a: { position: number },
+                                    b: { position: number }
+                                ) => a.position - b.position
+                            );
+
+                        // Find current chapter (the last chapter whose position is <= current position)
+                        let currentChapter = chapters[0];
+                        let currentChapterIndex = 0;
+
+                        for (
+                            let i = 0;
+                            i < chapters.length;
+                            i++
+                        ) {
+                            if (
+                                chapters[i].position <=
+                                percentage
+                            ) {
+                                currentChapter =
+                                    chapters[i];
+                                currentChapterIndex = i;
+                            } else {
+                                break;
+                            }
+                        }
+
+                        // Get chapter bounds
+                        const chapterStart =
+                            currentChapter.position;
+                        const chapterEnd =
+                            currentChapterIndex <
+                            chapters.length - 1
+                                ? chapters[
+                                      currentChapterIndex +
+                                          1
+                                  ].position
+                                : 100;
+
+                        // Calculate chapter percentage
+                        const chapterLength =
+                            chapterEnd - chapterStart;
+                        const positionInChapter =
+                            percentage - chapterStart;
+                        const chapterPercentage =
+                            Math.round(
+                                (positionInChapter /
+                                    chapterLength) *
+                                    100
+                            );
+                        const chapterRemaining = Math.max(
+                            0,
+                            100 - chapterPercentage
+                        );
+
+                        chapterProgress.textContent = `${chapterRemaining}% left`;
+                    }
+                }
+            } catch (error) {
+                console.error(
+                    "Error updating chapter progress:",
+                    error
+                );
+            }
+        }
+
+        // Show progress info
         if (progressInfo) {
-            progressInfo.textContent = `${percentage}% of book`;
             progressInfo.classList.add("active");
 
             // Use a ref-based timeout to avoid React state
             if (progressTimeoutRef.current) {
                 clearTimeout(progressTimeoutRef.current);
             }
+
             progressTimeoutRef.current = setTimeout(() => {
                 if (progressInfo) {
                     progressInfo.classList.remove("active");
@@ -288,6 +397,7 @@ export function ContentRenderer({
         if (positionChangeTimerRef.current) {
             clearTimeout(positionChangeTimerRef.current);
         }
+
         positionChangeTimerRef.current = setTimeout(() => {
             const positionChangeEvent = new CustomEvent(
                 "reader-position-change",
@@ -614,6 +724,60 @@ export function ContentRenderer({
                                 behavior: "smooth",
                             });
 
+                            // Calculate and update progress bar based on scroll position
+                            const readerContent =
+                                document.getElementById(
+                                    "reader-content"
+                                );
+                            if (readerContent) {
+                                setTimeout(() => {
+                                    const scrollHeight =
+                                        readerContent.scrollHeight -
+                                        readerContent.clientHeight;
+                                    const scrollPosition =
+                                        readerContent.scrollTop;
+                                    const percentage =
+                                        Math.min(
+                                            100,
+                                            Math.max(
+                                                0,
+                                                Math.round(
+                                                    (scrollPosition /
+                                                        scrollHeight) *
+                                                        100
+                                                )
+                                            )
+                                        );
+
+                                    // Update progress bar
+                                    const progressBar =
+                                        document.getElementById(
+                                            "progress-bar"
+                                        );
+                                    if (progressBar) {
+                                        progressBar.style.width = `${percentage}%`;
+                                    }
+
+                                    // Update progress handle
+                                    const progressHandle =
+                                        document.getElementById(
+                                            "progress-handle"
+                                        );
+                                    if (progressHandle) {
+                                        progressHandle.style.left = `${percentage}%`;
+                                    }
+
+                                    // Update tooltip
+                                    const progressTooltip =
+                                        document.getElementById(
+                                            "progress-tooltip"
+                                        );
+                                    if (progressTooltip) {
+                                        progressTooltip.textContent = `${percentage}%`;
+                                    }
+                                }, 100); // Small delay to ensure scrolling has completed
+                            }
+
                             // Close sidebar
                             const sidebar =
                                 document.getElementById(
@@ -634,13 +798,201 @@ export function ContentRenderer({
                     }
                 }
 
-                // If we have a position, scroll to it
-                if (typeof item.position === "number") {
+                // Instead of using the stored position, find the element in the DOM and scroll to it
+                // This ensures position calculation is based on the same DOM heights as the progress bar
+                const chapterId = item.id;
+                const chapterElement =
+                    document.getElementById(
+                        `chapter-${chapterId}`
+                    ) ||
+                    document.querySelector(
+                        `[data-chapter-id="${chapterId}"]`
+                    );
+
+                if (chapterElement) {
+                    chapterElement.scrollIntoView({
+                        behavior: "smooth",
+                    });
+
+                    // Calculate and update progress bar based on scroll position
                     const readerContent =
                         document.getElementById(
                             "reader-content"
                         );
                     if (readerContent) {
+                        setTimeout(() => {
+                            const scrollHeight =
+                                readerContent.scrollHeight -
+                                readerContent.clientHeight;
+                            const scrollPosition =
+                                readerContent.scrollTop;
+                            const percentage = Math.min(
+                                100,
+                                Math.max(
+                                    0,
+                                    Math.round(
+                                        (scrollPosition /
+                                            scrollHeight) *
+                                            100
+                                    )
+                                )
+                            );
+
+                            // Update progress bar
+                            const progressBar =
+                                document.getElementById(
+                                    "progress-bar"
+                                );
+                            if (progressBar) {
+                                progressBar.style.width = `${percentage}%`;
+                            }
+
+                            // Update progress handle
+                            const progressHandle =
+                                document.getElementById(
+                                    "progress-handle"
+                                );
+                            if (progressHandle) {
+                                progressHandle.style.left = `${percentage}%`;
+                            }
+
+                            // Update tooltip
+                            const progressTooltip =
+                                document.getElementById(
+                                    "progress-tooltip"
+                                );
+                            if (progressTooltip) {
+                                progressTooltip.textContent = `${percentage}%`;
+                            }
+                        }, 100); // Small delay to ensure scrolling has completed
+                    }
+                } else if (
+                    typeof item.position === "number"
+                ) {
+                    // Fallback to position-based scrolling if DOM element not found
+                    const readerContent =
+                        document.getElementById(
+                            "reader-content"
+                        );
+                    if (readerContent) {
+                        // First try to find actual chapter content based on href
+                        if (item.href) {
+                            const href =
+                                item.href.split("#")[0];
+                            // Try to find chapter with this href
+                            const chapters =
+                                document.querySelectorAll(
+                                    ".chapter"
+                                );
+                            let targetChapter = null;
+
+                            // Find chapter by scanning content for matching href
+                            for (
+                                let i = 0;
+                                i < chapters.length;
+                                i++
+                            ) {
+                                const chapter = chapters[i];
+                                const links =
+                                    chapter.querySelectorAll(
+                                        "a[href]"
+                                    );
+
+                                for (
+                                    let j = 0;
+                                    j < links.length;
+                                    j++
+                                ) {
+                                    const link = links[j];
+                                    if (
+                                        link.getAttribute(
+                                            "href"
+                                        ) === href
+                                    ) {
+                                        targetChapter =
+                                            chapter;
+                                        break;
+                                    }
+                                }
+
+                                if (targetChapter) break;
+                            }
+
+                            if (targetChapter) {
+                                targetChapter.scrollIntoView(
+                                    {
+                                        behavior: "smooth",
+                                    }
+                                );
+
+                                // Calculate and update progress bar
+                                setTimeout(() => {
+                                    const scrollHeight =
+                                        readerContent.scrollHeight -
+                                        readerContent.clientHeight;
+                                    const scrollPosition =
+                                        readerContent.scrollTop;
+                                    const percentage =
+                                        Math.min(
+                                            100,
+                                            Math.max(
+                                                0,
+                                                Math.round(
+                                                    (scrollPosition /
+                                                        scrollHeight) *
+                                                        100
+                                                )
+                                            )
+                                        );
+
+                                    // Update progress bar
+                                    const progressBar =
+                                        document.getElementById(
+                                            "progress-bar"
+                                        );
+                                    if (progressBar) {
+                                        progressBar.style.width = `${percentage}%`;
+                                    }
+
+                                    // Update progress handle
+                                    const progressHandle =
+                                        document.getElementById(
+                                            "progress-handle"
+                                        );
+                                    if (progressHandle) {
+                                        progressHandle.style.left = `${percentage}%`;
+                                    }
+
+                                    // Update tooltip
+                                    const progressTooltip =
+                                        document.getElementById(
+                                            "progress-tooltip"
+                                        );
+                                    if (progressTooltip) {
+                                        progressTooltip.textContent = `${percentage}%`;
+                                    }
+                                }, 100);
+
+                                // Close sidebar
+                                const sidebar =
+                                    document.getElementById(
+                                        "reader-sidebar"
+                                    );
+                                const overlay =
+                                    document.getElementById(
+                                        "sidebar-overlay"
+                                    );
+                                sidebar?.classList.remove(
+                                    "active"
+                                );
+                                overlay?.classList.remove(
+                                    "active"
+                                );
+                                return;
+                            }
+                        }
+
+                        // Last resort: use the metadata position
                         const scrollHeight =
                             readerContent.scrollHeight -
                             readerContent.clientHeight;
@@ -670,17 +1022,17 @@ export function ContentRenderer({
                             progressHandle.style.left = `${item.position}%`;
                         }
                     }
-
-                    // Close sidebar
-                    const sidebar = document.getElementById(
-                        "reader-sidebar"
-                    );
-                    const overlay = document.getElementById(
-                        "sidebar-overlay"
-                    );
-                    sidebar?.classList.remove("active");
-                    overlay?.classList.remove("active");
                 }
+
+                // Close sidebar
+                const sidebar = document.getElementById(
+                    "reader-sidebar"
+                );
+                const overlay = document.getElementById(
+                    "sidebar-overlay"
+                );
+                sidebar?.classList.remove("active");
+                overlay?.classList.remove("active");
             });
 
             container.appendChild(li);
@@ -701,38 +1053,197 @@ export function ContentRenderer({
         const progressChapters = document.getElementById(
             "progress-chapters"
         );
-        const tocItems =
-            document.querySelectorAll(".toc-item");
-
-        if (!progressChapters || tocItems.length === 0)
-            return;
+        if (!progressChapters) return;
 
         progressChapters.innerHTML = "";
 
-        // Only add markers for top-level items to avoid clutter
-        tocItems.forEach((item) => {
-            // Skip nested items
-            if (
-                item.classList.contains(
-                    "toc-child-level-1"
-                ) ||
-                item.classList.contains("toc-child-level-2")
-            ) {
-                return;
-            }
+        // Only create markers for TOC items, but calculate their positions based on DOM
+        const readerContent = document.getElementById(
+            "reader-content"
+        );
+        if (!readerContent) return;
 
-            const position = parseFloat(
-                item.getAttribute("data-position") || "0"
+        const totalHeight = readerContent.scrollHeight;
+        const clientHeight = readerContent.clientHeight;
+        const usableHeight = totalHeight - clientHeight;
+
+        // Get TOC data from meta tag
+        const tocDataMeta = document.querySelector(
+            'meta[name="toc-data"]'
+        );
+        if (
+            !tocDataMeta ||
+            !tocDataMeta.getAttribute("content")
+        )
+            return;
+
+        try {
+            const tocData = JSON.parse(
+                tocDataMeta.getAttribute("content") || "[]"
             );
-            const title = item.textContent || "Chapter";
 
-            const marker = document.createElement("div");
-            marker.className = "chapter-marker";
-            marker.style.left = `${position}%`;
-            marker.setAttribute("data-title", title);
+            // Only use top-level items to avoid cluttering the progress bar
+            const topLevelItems = tocData.filter(
+                (item: { level: number }) =>
+                    item.level === 0
+            );
 
-            progressChapters.appendChild(marker);
-        });
+            if (topLevelItems.length === 0) return;
+
+            console.log(
+                "Calculating markers for TOC items:",
+                topLevelItems.length
+            );
+
+            // Create a marker for each top-level TOC item
+            topLevelItems.forEach(
+                (item: {
+                    id: string;
+                    title?: string;
+                    href?: string;
+                    level: number;
+                    position: number;
+                }) => {
+                    // First try to find the corresponding DOM element
+                    const chapterId = item.id;
+                    let foundElement = false;
+
+                    // Try multiple methods to find the element
+
+                    // 1. Try by chapter ID
+                    const chapterElement =
+                        document.getElementById(
+                            `chapter-${chapterId}`
+                        ) ||
+                        document.querySelector(
+                            `[data-chapter-id="${chapterId}"]`
+                        );
+
+                    if (chapterElement) {
+                        // Calculate position based on DOM position
+                        const rect =
+                            chapterElement.getBoundingClientRect();
+                        const chapterTop =
+                            rect.top +
+                            readerContent.scrollTop;
+                        const percentage = Math.min(
+                            100,
+                            Math.max(
+                                0,
+                                (chapterTop /
+                                    usableHeight) *
+                                    100
+                            )
+                        );
+
+                        // Create marker
+                        const marker =
+                            document.createElement("div");
+                        marker.className = "chapter-marker";
+                        marker.style.left = `${percentage}%`;
+                        marker.setAttribute(
+                            "data-title",
+                            item.title || "Chapter"
+                        );
+                        progressChapters.appendChild(
+                            marker
+                        );
+                        foundElement = true;
+                    }
+
+                    // 2. If not found, try by href if available
+                    else if (item.href && !foundElement) {
+                        const fragment = item.href.includes(
+                            "#"
+                        )
+                            ? item.href.split("#")[1]
+                            : null;
+
+                        // First try to find the element by ID (fragment)
+                        if (fragment) {
+                            const fragmentElement =
+                                document.getElementById(
+                                    fragment
+                                ) ||
+                                document.querySelector(
+                                    `[name="${fragment}"]`
+                                );
+
+                            if (fragmentElement) {
+                                const rect =
+                                    fragmentElement.getBoundingClientRect();
+                                const elemTop =
+                                    rect.top +
+                                    readerContent.scrollTop;
+                                const percentage = Math.min(
+                                    100,
+                                    Math.max(
+                                        0,
+                                        (elemTop /
+                                            usableHeight) *
+                                            100
+                                    )
+                                );
+
+                                const marker =
+                                    document.createElement(
+                                        "div"
+                                    );
+                                marker.className =
+                                    "chapter-marker";
+                                marker.style.left = `${percentage}%`;
+                                marker.setAttribute(
+                                    "data-title",
+                                    item.title || "Chapter"
+                                );
+                                progressChapters.appendChild(
+                                    marker
+                                );
+                                foundElement = true;
+                            }
+                        }
+
+                        // If fragment not found, try to find chapter with matching href
+                        if (!foundElement) {
+                            // Use the original position from metadata as fallback
+                            const marker =
+                                document.createElement(
+                                    "div"
+                                );
+                            marker.className =
+                                "chapter-marker";
+                            marker.style.left = `${item.position}%`;
+                            marker.setAttribute(
+                                "data-title",
+                                item.title || "Chapter"
+                            );
+                            progressChapters.appendChild(
+                                marker
+                            );
+                        }
+                    }
+                    // 3. If still not found, use original position from metadata
+                    else if (!foundElement) {
+                        const marker =
+                            document.createElement("div");
+                        marker.className = "chapter-marker";
+                        marker.style.left = `${item.position}%`;
+                        marker.setAttribute(
+                            "data-title",
+                            item.title || "Chapter"
+                        );
+                        progressChapters.appendChild(
+                            marker
+                        );
+                    }
+                }
+            );
+        } catch (err) {
+            console.error(
+                "Failed to parse TOC data for markers:",
+                err
+            );
+        }
     };
 
     // Initialize draggable progress handle
