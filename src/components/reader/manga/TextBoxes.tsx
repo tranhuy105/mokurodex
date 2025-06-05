@@ -207,9 +207,19 @@ export default function TextBoxes({
                     const isWideImage =
                         imgWidth > imgHeight * 1.5;
 
+                    // Handle mobile differently - use container width as primary reference
+                    const isMobileView =
+                        window.innerWidth <= 768 ||
+                        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+                            navigator.userAgent
+                        );
+
                     // Calculate scale based on the limiting dimension
                     let scale;
-                    if (isWideImage) {
+                    if (isMobileView) {
+                        // On mobile, prioritize fitting the width of the container
+                        scale = parentWidth / imgWidth;
+                    } else if (isWideImage) {
                         // For wide images, use height as reference if it's the limiting factor
                         const widthScale =
                             parentWidth / imgWidth;
@@ -292,16 +302,51 @@ export default function TextBoxes({
                     null;
 
                 if (typeof ResizeObserver !== "undefined") {
+                    // Store initial parentRect dimensions for comparison
+                    const initialParentRect =
+                        parent.getBoundingClientRect();
+
                     resizeObserver = new ResizeObserver(
-                        () => {
+                        (entries) => {
                             // Only trigger resize if component is still mounted
                             if (isMounted.current) {
-                                debouncedResize();
+                                // Check if the size actually changed meaningfully
+                                const entry = entries[0];
+                                if (entry) {
+                                    const {
+                                        width,
+                                        height,
+                                    } = entry.contentRect;
+                                    // If there's a significant change in dimensions, trigger update
+                                    if (
+                                        Math.abs(
+                                            width -
+                                                initialParentRect.width
+                                        ) > 5 ||
+                                        Math.abs(
+                                            height -
+                                                initialParentRect.height
+                                        ) > 5
+                                    ) {
+                                        debouncedResize();
+                                    }
+                                } else {
+                                    // Fallback if entry is not available
+                                    debouncedResize();
+                                }
                             }
                         }
                     );
 
-                    resizeObserver.observe(parent);
+                    try {
+                        resizeObserver.observe(parent);
+                    } catch (e) {
+                        console.error(
+                            "Failed to observe parent for resize:",
+                            e
+                        );
+                        // Fallback to window resize only
+                    }
                 }
 
                 return () => {
@@ -347,6 +392,12 @@ export default function TextBoxes({
             style={{
                 width: `${imgWidth}px`,
                 height: `${imgHeight}px`,
+                transform: isMobile
+                    ? `scale(${
+                          window.innerWidth / imgWidth
+                      })`
+                    : undefined,
+                transformOrigin: "top left",
             }}
         >
             {sortedBlocks.map(

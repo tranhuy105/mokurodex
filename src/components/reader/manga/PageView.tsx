@@ -514,8 +514,14 @@ const PageView = memo(function PageView({
                                     position: "absolute",
                                     top: 0,
                                     left: 0,
-                                    width: `${page.width}px`,
-                                    height: `${page.height}px`,
+                                    right: 0,
+                                    bottom: 0,
+                                    width: isMobile
+                                        ? "100%"
+                                        : `${page.width}px`,
+                                    height: isMobile
+                                        ? "100%"
+                                        : `${page.height}px`,
                                     transform: transform
                                         ? `scale(${
                                               1 /
