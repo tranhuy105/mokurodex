@@ -1695,95 +1695,202 @@ export function ContentRenderer({
     };
 
     // Set up fullscreen button
-    const setupFullscreenButton = () => {
-        const fullscreenBtn = document.getElementById(
-            "fullscreen-btn"
-        );
-        const readerContainer = document.querySelector(
-            ".litera-reader"
-        );
+const setupFullscreenButton = () => {
+    const fullscreenBtn = document.getElementById("fullscreen-btn");
+    const readerContainer = document.querySelector(".litera-reader");
 
-        if (!fullscreenBtn || !readerContainer) return;
+    if (!fullscreenBtn || !readerContainer) return;
 
-        try {
-            fullscreenBtn.addEventListener("click", () => {
-                if (!document.fullscreenElement) {
-                    // Enter fullscreen
-                    if (readerContainer.requestFullscreen) {
-                        readerContainer.requestFullscreen();
-                    } else if (
-                        "webkitRequestFullscreen" in
-                        readerContainer
-                    ) {
-                        (
-                            readerContainer as HTMLElement & {
+    try {
+        fullscreenBtn.addEventListener("click", () => {
+            const readerContent = document.getElementById("reader-content");
+            
+            if (!document.fullscreenElement) {
+                // Store current scroll position before entering fullscreen
+                let currentScrollTop = 0;
+                let currentScrollPercentage = 0;
+                
+                if (readerContent) {
+                    currentScrollTop = readerContent.scrollTop;
+                    const scrollHeight = readerContent.scrollHeight - readerContent.clientHeight;
+                    currentScrollPercentage = scrollHeight > 0 ? (currentScrollTop / scrollHeight) * 100 : 0;
+                }
+
+                // Enter fullscreen
+                const enterFullscreen = async () => {
+                    try {
+                        if (readerContainer.requestFullscreen) {
+                            await readerContainer.requestFullscreen();
+                        } else if ("webkitRequestFullscreen" in readerContainer) {
+                            await (readerContainer as HTMLElement & {
                                 webkitRequestFullscreen(): Promise<void>;
-                            }
-                        ).webkitRequestFullscreen();
-                    } else if (
-                        "msRequestFullscreen" in
-                        readerContainer
-                    ) {
-                        (
-                            readerContainer as HTMLElement & {
+                            }).webkitRequestFullscreen();
+                        } else if ("msRequestFullscreen" in readerContainer) {
+                            await (readerContainer as HTMLElement & {
                                 msRequestFullscreen(): Promise<void>;
-                            }
-                        ).msRequestFullscreen();
-                    }
+                            }).msRequestFullscreen();
+                        }
 
-                    readerContainer.classList.add(
-                        "fullscreen"
-                    );
-                } else {
-                    // Exit fullscreen
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen();
-                    } else if (
-                        "webkitExitFullscreen" in document
-                    ) {
-                        (
-                            document as Document & {
+                        readerContainer.classList.add("fullscreen");
+
+                        // Restore scroll position after layout settles
+                        setTimeout(() => {
+                            if (readerContent) {
+                                const newScrollHeight = readerContent.scrollHeight - readerContent.clientHeight;
+                                const newScrollTop = (currentScrollPercentage / 100) * newScrollHeight;
+                                
+                                readerContent.scrollTo({
+                                    top: newScrollTop,
+                                    behavior: "auto"
+                                });
+
+                                // Update progress bar and handle to match new position
+                                const percentage = Math.min(100, Math.max(0, Math.round(currentScrollPercentage)));
+                                
+                                const progressBar = document.getElementById("progress-bar");
+                                if (progressBar) {
+                                    progressBar.style.width = `${percentage}%`;
+                                }
+
+                                const progressHandle = document.getElementById("progress-handle");
+                                if (progressHandle) {
+                                    progressHandle.style.left = `${percentage}%`;
+                                }
+
+                                // Update tooltip
+                                const tooltipPosition = document.getElementById("tooltip-position");
+                                if (tooltipPosition) {
+                                    tooltipPosition.textContent = `${Math.round(percentage)}%`;
+                                }
+                            }
+                        }, 100); // Small delay to allow layout to complete
+
+                    } catch (error) {
+                        console.error("Error entering fullscreen:", error);
+                        readerContainer.classList.add("fullscreen");
+                    }
+                };
+
+                enterFullscreen();
+
+            } else {
+                // Store current scroll position before exiting fullscreen
+                let currentScrollTop = 0;
+                let currentScrollPercentage = 0;
+                
+                if (readerContent) {
+                    currentScrollTop = readerContent.scrollTop;
+                    const scrollHeight = readerContent.scrollHeight - readerContent.clientHeight;
+                    currentScrollPercentage = scrollHeight > 0 ? (currentScrollTop / scrollHeight) * 100 : 0;
+                }
+
+                // Exit fullscreen
+                const exitFullscreen = async () => {
+                    try {
+                        if (document.exitFullscreen) {
+                            await document.exitFullscreen();
+                        } else if ("webkitExitFullscreen" in document) {
+                            await (document as Document & {
                                 webkitExitFullscreen(): Promise<void>;
-                            }
-                        ).webkitExitFullscreen();
-                    } else if (
-                        "msExitFullscreen" in document
-                    ) {
-                        (
-                            document as Document & {
+                            }).webkitExitFullscreen();
+                        } else if ("msExitFullscreen" in document) {
+                            await (document as Document & {
                                 msExitFullscreen(): Promise<void>;
+                            }).msExitFullscreen();
+                        }
+
+                        readerContainer.classList.remove("fullscreen");
+
+                        // Restore scroll position after layout settles
+                        setTimeout(() => {
+                            if (readerContent) {
+                                const newScrollHeight = readerContent.scrollHeight - readerContent.clientHeight;
+                                const newScrollTop = (currentScrollPercentage / 100) * newScrollHeight;
+                                
+                                readerContent.scrollTo({
+                                    top: newScrollTop,
+                                    behavior: "auto"
+                                });
+
+                                // Update progress bar and handle to match new position
+                                const percentage = Math.min(100, Math.max(0, Math.round(currentScrollPercentage)));
+                                
+                                const progressBar = document.getElementById("progress-bar");
+                                if (progressBar) {
+                                    progressBar.style.width = `${percentage}%`;
+                                }
+
+                                const progressHandle = document.getElementById("progress-handle");
+                                if (progressHandle) {
+                                    progressHandle.style.left = `${percentage}%`;
+                                }
+
+                                // Update tooltip
+                                const tooltipPosition = document.getElementById("tooltip-position");
+                                if (tooltipPosition) {
+                                    tooltipPosition.textContent = `${Math.round(percentage)}%`;
+                                }
                             }
-                        ).msExitFullscreen();
-                    }
+                        }, 100); // Small delay to allow layout to complete
 
-                    readerContainer.classList.remove(
-                        "fullscreen"
+                    } catch (error) {
+                        console.error("Error exiting fullscreen:", error);
+                        readerContainer.classList.remove("fullscreen");
+                    }
+                };
+
+                exitFullscreen();
+            }
+        });
+
+        // Update button when fullscreen state changes (backup handler)
+        document.addEventListener("fullscreenchange", () => {
+            // Small delay to ensure layout is stable
+            setTimeout(() => {
+                if (document.fullscreenElement) {
+                    readerContainer.classList.add("fullscreen");
+                } else {
+                    readerContainer.classList.remove("fullscreen");
+                }
+                
+                // Trigger a scroll event to update progress indicators
+                const readerContent = document.getElementById("reader-content");
+                if (readerContent) {
+                    handleScroll();
+                }
+            }, 50);
+        });
+
+        // Also listen for other fullscreen change events for cross-browser compatibility
+        ["webkitfullscreenchange", "mozfullscreenchange", "msfullscreenchange"].forEach(eventType => {
+            document.addEventListener(eventType, () => {
+                setTimeout(() => {
+                    const isFullscreen = !!(
+                        document.fullscreenElement ||
+                        (document as any).webkitFullscreenElement ||
+                        (document as any).mozFullScreenElement ||
+                        (document as any).msFullscreenElement
                     );
-                }
-            });
-
-            // Update button when fullscreen state changes
-            document.addEventListener(
-                "fullscreenchange",
-                () => {
-                    if (document.fullscreenElement) {
-                        readerContainer.classList.add(
-                            "fullscreen"
-                        );
+                    
+                    if (isFullscreen) {
+                        readerContainer.classList.add("fullscreen");
                     } else {
-                        readerContainer.classList.remove(
-                            "fullscreen"
-                        );
+                        readerContainer.classList.remove("fullscreen");
                     }
-                }
-            );
-        } catch (error) {
-            console.error(
-                "Error setting up fullscreen button:",
-                error
-            );
-        }
-    };
+                    
+                    // Trigger a scroll event to update progress indicators
+                    const readerContent = document.getElementById("reader-content");
+                    if (readerContent) {
+                        handleScroll();
+                    }
+                }, 50);
+            });
+        });
+
+    } catch (error) {
+        console.error("Error setting up fullscreen button:", error);
+    }
+};
 
     // Cleanup function
     useEffect(() => {
