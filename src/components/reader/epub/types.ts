@@ -7,8 +7,14 @@ declare global {
             updateProgressBar: () => void;
             toggleSidebar: () => void;
             scrollToChapter: (chapterId: string) => void;
-            appendChapter: (chapterHtml: string, chapterId: string) => void;
+            appendChapter: (
+                chapterHtml: string,
+                chapterId: string
+            ) => void;
             setSpine: (spineData: string[]) => void;
+            updateProgressHandle: (
+                position: number
+            ) => void;
         };
         _progressTimeout: NodeJS.Timeout;
     }
@@ -22,7 +28,26 @@ export interface ChapterNearEndEvent {
 
 export interface LoadChapterEvent {
     chapterId: string;
-    direction: 'next' | 'prev';
+    direction: "next" | "prev";
+}
+
+// Navigation point in TOC
+export interface NavPoint {
+    id: string;
+    label: string;
+    href: string;
+    playOrder: number;
+    children?: NavPoint[];
+}
+
+// TOC structure
+export interface TocItem {
+    id: string;
+    title: string;
+    href: string;
+    level: number;
+    position: number; // Position percentage in the book
+    children?: TocItem[];
 }
 
 // Common types for EPUB reader components
@@ -59,12 +84,14 @@ export interface ParsedEpub {
     images: Record<string, string>; // path -> dataUrl
     spine: string[]; // chapter IDs in reading order
     manifestMap?: Record<string, ManifestItem>; // Added for dynamic loading
+    toc?: TocItem[]; // Table of contents
 }
 
 export interface EpubReaderProps {
     epubData: ArrayBuffer;
     onPositionChange?: (position: number) => void;
     initialPosition?: number;
+    saveReadingPosition: () => void;
 }
 
 export interface ContentRendererProps {
@@ -72,4 +99,5 @@ export interface ContentRendererProps {
     isLoading: boolean;
     error: string | null;
     containerRef: RefObject<HTMLDivElement | null>;
+    saveReadingPosition: () => void;
 }

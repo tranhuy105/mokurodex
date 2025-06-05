@@ -34,6 +34,7 @@ export function EpubReader({
     epubData,
     onPositionChange,
     initialPosition = 0,
+    saveReadingPosition,
 }: EpubReaderProps) {
     const [content, setContent] = useState<string>("");
     const [isLoading, setIsLoading] = useState(true);
@@ -377,9 +378,6 @@ export function EpubReader({
                 if (signal.aborted) return;
                 setIsLoading(true);
                 setError(null);
-
-                console.time("EPUB parsing");
-
                 // Parse the EPUB file
                 const parsedEpub = await parseEpub(
                     memoizedEpubData,
@@ -433,7 +431,8 @@ export function EpubReader({
                     await processContentInChunks(
                         bodyContent,
                         signal,
-                        initialPosition
+                        initialPosition,
+                        parsedEpub.toc || []
                     );
 
                 // Set the processed content
@@ -560,6 +559,7 @@ export function EpubReader({
                 isLoading={isLoading}
                 error={error}
                 containerRef={containerRef}
+                saveReadingPosition={saveReadingPosition}
             />
         </div>
     );

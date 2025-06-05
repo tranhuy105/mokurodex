@@ -7,12 +7,8 @@ import {
     useUpdateReadingHistory,
 } from "@/hooks/use-manga-reader";
 import { Volume } from "@prisma/client";
-import {
-    useCallback,
-    useEffect,
-    useRef,
-    useState,
-} from "react";
+import { useCallback, useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { LoadingOverlay } from "./LoadingOverlay";
 
 interface EpubReaderContainerProps {
@@ -32,13 +28,8 @@ export default function EpubReaderContainer({
     const [error, setError] = useState<string | null>(null);
     const [currentPosition, setCurrentPosition] =
         useState(0);
-    const [lastSavedPosition, setLastSavedPosition] =
-        useState(0);
     const [initialPosition, setInitialPosition] =
         useState(0);
-    const saveTimerRef = useRef<NodeJS.Timeout | null>(
-        null
-    );
 
     // Fetch the EPUB file URL
     const { data: epubUrl } = useEpubFileUrl(
@@ -65,60 +56,24 @@ export default function EpubReaderContainer({
                 `Setting initial position from history: ${latestHistory.position}%`
             );
             setInitialPosition(latestHistory.position);
-            setLastSavedPosition(latestHistory.position);
         }
     }, [latestHistory, volume.id]);
 
-    // Function to save reading position
-    const saveReadingPosition = useCallback(
-        (position: number) => {
-            if (
-                position !== lastSavedPosition &&
-                position > 0 &&
-                Math.abs(position - lastSavedPosition) >= 5
-            ) {
-                updateReadingHistory({
-                    contentId,
-                    volumeId: volume.id,
-                    position,
-                });
-                setLastSavedPosition(position);
-            }
-        },
-        [
+    // Function to manually save reading position
+    const saveReadingPosition = useCallback(() => {
+        updateReadingHistory({
             contentId,
-            volume.id,
-            updateReadingHistory,
-            lastSavedPosition,
-        ]
-    );
+            volumeId: volume.id,
+            position: currentPosition,
+        });
 
-    // Handle position change with debounce
-    useEffect(() => {
-        if (saveTimerRef.current) {
-            clearTimeout(saveTimerRef.current);
-        }
-
-        // Only save if position changed significantly (5% or more)
-        if (
-            currentPosition > 0 &&
-            Math.abs(currentPosition - lastSavedPosition) >=
-                5
-        ) {
-            saveTimerRef.current = setTimeout(() => {
-                saveReadingPosition(currentPosition);
-            }, 3000); // Increased debounce time to reduce saves
-        }
-
-        return () => {
-            if (saveTimerRef.current) {
-                clearTimeout(saveTimerRef.current);
-            }
-        };
+        // Show toast notification
+        toast.success("Progress saved!");
     }, [
+        contentId,
+        volume.id,
+        updateReadingHistory,
         currentPosition,
-        saveReadingPosition,
-        lastSavedPosition,
     ]);
 
     // Fetch the EPUB file when URL is available
@@ -154,24 +109,6 @@ export default function EpubReaderContainer({
         fetchEpub();
     }, [epubUrl]);
 
-    // Save position on unmount
-    useEffect(() => {
-        return () => {
-            if (
-                currentPosition > 0 &&
-                Math.abs(
-                    currentPosition - lastSavedPosition
-                ) >= 5
-            ) {
-                saveReadingPosition(currentPosition);
-            }
-        };
-    }, [
-        currentPosition,
-        saveReadingPosition,
-        lastSavedPosition,
-    ]);
-
     // Handle scroll position changes from the EpubReader
     const handlePositionChange = useCallback(
         (position: number) => {
@@ -204,14 +141,18 @@ export default function EpubReaderContainer({
     }
 
     return (
-        <div className="flex flex-col h-screen">
+        <div className="flex flex-col h-screen relative">
             <div className="flex-grow">
                 <EpubReader
                     epubData={epubData}
                     onPositionChange={handlePositionChange}
                     initialPosition={initialPosition}
+                    saveReadingPosition={
+                        saveReadingPosition
+                    }
                 />
             </div>
+
             {/* <OfflineManager
                 contentId={contentId}
                 contentTitle={

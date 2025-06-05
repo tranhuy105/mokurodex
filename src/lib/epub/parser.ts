@@ -2,7 +2,9 @@ import {
     EpubChapter,
     EpubMetadata,
     ManifestItem,
+    NavPoint,
     ParsedEpub,
+    TocItem,
 } from "@/components/reader/epub/types";
 import JSZip from "jszip";
 import { parseStringPromise } from "xml2js";
@@ -77,6 +79,26 @@ export async function parseEpub(
         {}
     );
 
+    // Debug manifest
+    console.log(
+        "Manifest items:",
+        manifest.map((item: any) => ({
+            id: item.$.id,
+            href: item.$.href,
+            mediaType: item.$["media-type"],
+            properties: item.$.properties,
+        }))
+    );
+
+    // Find TOC using improved logic
+    const tocPath = await findTocPath(
+        opfData,
+        manifest,
+        epubZip,
+        basePathPrefix
+    );
+    console.log("Final TOC path found:", tocPath);
+
     // Process images and chapters in parallel
     const imagePromise = processImages(
         manifest,
@@ -89,6 +111,8 @@ export async function parseEpub(
         (item: { $: { idref: string } }) => item.$.idref
     );
 
+    console.log("Spine items:", spineItems);
+
     const chaptersPromise = processChapters(
         spineItems,
         manifestMap,
@@ -96,6 +120,25 @@ export async function parseEpub(
         basePathPrefix,
         signal
     );
+
+    // Extract TOC if available
+    let tocItems: TocItem[] = [];
+    if (tocPath) {
+        try {
+            tocItems = await extractToc(
+                epubZip,
+                tocPath,
+                basePathPrefix,
+                manifestMap,
+                signal
+            );
+            console.log("Extracted TOC items:", tocItems);
+        } catch (err) {
+            console.warn("Failed to extract TOC:", err);
+        }
+    } else {
+        console.warn("No TOC path found");
+    }
 
     // Wait for both promises to resolve
     const [images, chapters] = await Promise.all([
@@ -109,7 +152,108 @@ export async function parseEpub(
         images,
         spine: spineItems,
         manifestMap,
+        toc: tocItems,
     };
+}
+
+/**
+ * Find TOC path using multiple methods
+ */
+async function findTocPath(
+    opfData: {
+        package: { spine: { $: { toc: string } }[] };
+    },
+    manifest: {
+        $: {
+            id: string;
+            href: string;
+            "media-type": string;
+        };
+    }[],
+    epubZip: JSZip,
+    basePathPrefix: string
+): Promise<string> {
+    let tocPath = "";
+
+    // Method 1: Check spine toc attribute first (most reliable)
+    if (
+        opfData.package.spine[0].$ &&
+        opfData.package.spine[0].$.toc
+    ) {
+        const tocId = opfData.package.spine[0].$.toc;
+        const tocItem = manifest.find(
+            (item: any) => item.$.id === tocId
+        );
+        if (tocItem) {
+            tocPath = `${basePathPrefix}${tocItem.$.href}`;
+            console.log(
+                `Found TOC via spine toc attribute: ${tocPath}`
+            );
+            return tocPath;
+        }
+    }
+
+    // Method 2: Look for NCX media type in manifest
+    const ncxItem = manifest.find(
+        (item: any) =>
+            item.$["media-type"] ===
+                "application/x-dtbncx+xml" ||
+            item.$["media-type"] ===
+                "application/dtbncx+xml" ||
+            item.$.href.endsWith(".ncx")
+    );
+    if (ncxItem) {
+        tocPath = `${basePathPrefix}${ncxItem.$.href}`;
+        console.log(
+            `Found TOC via manifest media-type: ${tocPath}`
+        );
+        return tocPath;
+    }
+
+    // Method 3: Look for nav.xhtml (EPUB3 format)
+    const navItem = manifest.find(
+        (item: any) =>
+            (item.$.properties &&
+                item.$.properties.includes("nav")) ||
+            item.$.href.includes("nav") ||
+            item.$.href.includes("toc.xhtml")
+    );
+    if (navItem) {
+        tocPath = `${basePathPrefix}${navItem.$.href}`;
+        console.log(
+            `Found TOC via nav properties: ${tocPath}`
+        );
+        return tocPath;
+    }
+
+    // Method 4: Try common file names
+    const commonTocPaths = [
+        `${basePathPrefix}toc.ncx`,
+        `${basePathPrefix}TOC.ncx`,
+        `${basePathPrefix}nav.xhtml`,
+        `${basePathPrefix}toc.xhtml`,
+        `${basePathPrefix}navigation.ncx`,
+        `${basePathPrefix}ncx/toc.ncx`,
+        `toc.ncx`,
+        `TOC.ncx`,
+        `nav.xhtml`,
+        `toc.xhtml`,
+        `OEBPS/toc.ncx`,
+        `OEBPS/nav.xhtml`,
+    ];
+
+    for (const path of commonTocPaths) {
+        if (epubZip.file(path)) {
+            tocPath = path;
+            console.log(
+                `Found TOC via common paths: ${tocPath}`
+            );
+            return tocPath;
+        }
+    }
+
+    console.warn("No TOC file found");
+    return "";
 }
 
 /**
@@ -119,9 +263,6 @@ function extractMetadata(
     metadataNode: Record<string, unknown>
 ): EpubMetadata {
     const metadata: EpubMetadata = {};
-
-    console.log("metadataNode", metadataNode);
-
     // Extract title from dc:title
     if (
         metadataNode["dc:title"] &&
@@ -489,4 +630,386 @@ export function getPreviousChapterId(
         return null;
     }
     return spine[currentIndex - 1];
+}
+
+/**
+ * Extract the table of contents from TOC file
+ */
+async function extractToc(
+    epubZip: JSZip,
+    tocPath: string,
+    basePathPrefix: string,
+    manifestMap: Record<string, ManifestItem>,
+    signal: AbortSignal
+): Promise<TocItem[]> {
+    const tocContent = await epubZip
+        .file(tocPath)
+        ?.async("text");
+    if (!tocContent) {
+        throw new Error("TOC file not found");
+    }
+
+    if (signal.aborted) return [];
+
+    // Check if it's an XHTML file (EPUB3 nav)
+    if (
+        tocPath.endsWith(".xhtml") ||
+        tocPath.endsWith(".html")
+    ) {
+        return await extractEpub3Nav(
+            tocContent,
+            basePathPrefix
+        );
+    } else {
+        // Assume it's NCX format
+        return await extractNcxToc(
+            tocContent,
+            basePathPrefix
+        );
+    }
+}
+
+/**
+ * Extract TOC from NCX format (EPUB2)
+ */
+async function extractNcxToc(
+    ncxContent: string,
+    basePathPrefix: string
+): Promise<TocItem[]> {
+    try {
+        const ncxData = await parseStringPromise(
+            ncxContent
+        );
+        console.log(
+            "NCX Data structure:",
+            JSON.stringify(ncxData, null, 2)
+        );
+
+        const navMap = ncxData.ncx?.navMap?.[0];
+        if (!navMap || !navMap.navPoint) {
+            console.warn(
+                "No navMap or navPoint found in NCX"
+            );
+            return [];
+        }
+
+        const navPoints = processNavPoints(navMap.navPoint);
+        return navPointsToTocItems(
+            navPoints,
+            basePathPrefix,
+            0
+        );
+    } catch (error) {
+        console.error("Error parsing NCX:", error);
+        return [];
+    }
+}
+
+/**
+ * Extract TOC from EPUB3 nav format
+ */
+async function extractEpub3Nav(
+    navContent: string,
+    basePathPrefix: string
+): Promise<TocItem[]> {
+    try {
+        // Parse XHTML content to extract nav elements
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(
+            navContent,
+            "text/html"
+        );
+
+        // Look for nav element with epub:type="toc"
+        const navElement =
+            doc.querySelector('nav[epub\\:type="toc"]') ||
+            doc.querySelector("nav") ||
+            doc.querySelector("ol") ||
+            doc.querySelector("ul");
+
+        if (!navElement) {
+            console.warn(
+                "No navigation element found in EPUB3 nav"
+            );
+            return [];
+        }
+
+        console.log(
+            "Found nav element:",
+            navElement.outerHTML.substring(0, 200)
+        );
+        return parseNavElement(navElement, 0);
+    } catch (error) {
+        console.error("Error parsing EPUB3 nav:", error);
+        return [];
+    }
+}
+
+/**
+ * Parse nav element recursively for EPUB3
+ */
+function parseNavElement(
+    element: Element,
+    level: number
+): TocItem[] {
+    const items: TocItem[] = [];
+    const children = element.children;
+
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+
+        if (child.tagName.toLowerCase() === "li") {
+            const link = child.querySelector("a");
+            if (link) {
+                const tocItem: TocItem = {
+                    id:
+                        link.getAttribute("id") ||
+                        `toc-item-${level}-${i}`,
+                    title:
+                        link.textContent?.trim() ||
+                        "Untitled",
+                    href: link.getAttribute("href") || "",
+                    level: level,
+                    position: (i / children.length) * 100,
+                };
+
+                // Look for nested lists
+                const nestedList =
+                    child.querySelector("ol, ul");
+                if (nestedList) {
+                    tocItem.children = parseNavElement(
+                        nestedList,
+                        level + 1
+                    );
+                }
+
+                items.push(tocItem);
+            }
+        } else if (
+            child.tagName.toLowerCase() === "ol" ||
+            child.tagName.toLowerCase() === "ul"
+        ) {
+            // Direct nested list without li wrapper
+            items.push(...parseNavElement(child, level));
+        }
+    }
+
+    return items;
+}
+
+/**
+ * Process navigation points recursively for NCX
+ */
+function processNavPoints(
+    navPoints: Array<Record<string, unknown>>
+): NavPoint[] {
+    console.log("Processing navPoints:", navPoints.length);
+
+    return navPoints.map(
+        (point: Record<string, unknown>, index) => {
+            console.log(
+                `NavPoint ${index}:`,
+                JSON.stringify(point, null, 2)
+            );
+
+            const navPoint: NavPoint = {
+                id: point.$
+                    ? (point.$ as Record<string, string>)
+                          .id || `nav-${index}`
+                    : `nav-${index}`,
+                label: extractNavLabel(point),
+                href: extractNavHref(point),
+                playOrder: extractPlayOrder(point, index),
+            };
+
+            // Process children if present
+            if (
+                point.navPoint &&
+                Array.isArray(point.navPoint) &&
+                point.navPoint.length > 0
+            ) {
+                navPoint.children = processNavPoints(
+                    point.navPoint as Array<
+                        Record<string, unknown>
+                    >
+                );
+            }
+
+            console.log(`Processed navPoint:`, navPoint);
+            return navPoint;
+        }
+    );
+}
+
+/**
+ * Extract nav label from NCX navPoint
+ */
+function extractNavLabel(
+    point: Record<string, unknown>
+): string {
+    try {
+        if (
+            point.navLabel &&
+            Array.isArray(point.navLabel) &&
+            point.navLabel[0]
+        ) {
+            const navLabel = point.navLabel[0] as Record<
+                string,
+                unknown
+            >;
+            if (
+                navLabel.text &&
+                Array.isArray(navLabel.text)
+            ) {
+                return (
+                    String(navLabel.text[0]) || "Untitled"
+                );
+            }
+            if (typeof navLabel.text === "string") {
+                return navLabel.text;
+            }
+        }
+    } catch (error) {
+        console.warn("Error extracting nav label:", error);
+    }
+    return "Untitled";
+}
+
+/**
+ * Extract nav href from NCX navPoint
+ */
+function extractNavHref(
+    point: Record<string, unknown>
+): string {
+    try {
+        if (
+            point.content &&
+            Array.isArray(point.content) &&
+            point.content[0]
+        ) {
+            const content = point.content[0] as Record<
+                string,
+                unknown
+            >;
+            if (
+                content.$ &&
+                typeof content.$ === "object"
+            ) {
+                const attrs = content.$ as Record<
+                    string,
+                    string
+                >;
+                return attrs.src || "";
+            }
+        }
+    } catch (error) {
+        console.warn("Error extracting nav href:", error);
+    }
+    return "";
+}
+
+/**
+ * Extract play order from NCX navPoint
+ */
+function extractPlayOrder(
+    point: Record<string, unknown>,
+    fallbackIndex: number
+): number {
+    try {
+        if (point.$ && typeof point.$ === "object") {
+            const attrs = point.$ as Record<string, string>;
+            if (attrs.playOrder) {
+                return (
+                    parseInt(attrs.playOrder, 10) ||
+                    fallbackIndex
+                );
+            }
+        }
+    } catch (error) {
+        console.warn("Error extracting play order:", error);
+    }
+    return fallbackIndex;
+}
+
+/**
+ * Convert NavPoints to TocItems with position calculation
+ */
+function navPointsToTocItems(
+    navPoints: NavPoint[],
+    basePathPrefix: string,
+    level: number
+): TocItem[] {
+    return navPoints.map((navPoint, index) => {
+        // Extract the fragment identifier if present
+        let href = navPoint.href;
+        let fragment = "";
+
+        if (href.includes("#")) {
+            const parts = href.split("#");
+            href = parts[0];
+            fragment = parts[1];
+        }
+
+        // Resolve relative paths if needed
+        if (href.startsWith("../")) {
+            // Get the path components
+            const parts = href.split("/");
+            const fileName = parts.pop() || "";
+
+            // Count how many levels up we need to go
+            let upCount = 0;
+            for (const part of parts) {
+                if (part === "..") upCount++;
+            }
+
+            // Get base directory parts
+            const basePathParts = basePathPrefix
+                .split("/")
+                .filter((p) => p);
+
+            // Go up the required number of levels
+            const newBasePath = basePathParts.slice(
+                0,
+                Math.max(0, basePathParts.length - upCount)
+            );
+
+            // Remove all '../' parts from the path
+            const remainingParts = parts.filter(
+                (p) => p !== ".."
+            );
+
+            // Construct the resolved path
+            href = [
+                ...newBasePath,
+                ...remainingParts,
+                fileName,
+            ].join("/");
+        }
+
+        // Calculate approximate position (will be refined later)
+        const position =
+            (index / (navPoints.length || 1)) * 100;
+
+        const tocItem: TocItem = {
+            id: navPoint.id,
+            title: navPoint.label,
+            href: href + (fragment ? `#${fragment}` : ""),
+            level,
+            position,
+        };
+
+        // Process children if present
+        if (
+            navPoint.children &&
+            navPoint.children.length > 0
+        ) {
+            tocItem.children = navPointsToTocItems(
+                navPoint.children,
+                basePathPrefix,
+                level + 1
+            );
+        }
+
+        return tocItem;
+    });
 }
