@@ -1,5 +1,4 @@
 import { QueryClientProviderWrapper } from "@/components/provider/query-client-provider";
-import MobileDebugOverlay from "@/components/pwa/MobileDebugOverlay";
 import OnlineStatusOverlay from "@/components/pwa/OnlineStatusOverlay";
 import { ServiceWorkerRegistration } from "@/components/pwa/ServiceWorkerRegistration";
 import { UpdateNotification } from "@/components/pwa/UpdateNotification";
@@ -64,7 +63,7 @@ export default function RootLayout({
                             <main>{children}</main>
                             {/* <PWAInstall /> */}
                             <Toaster position="bottom-right" />
-                            <MobileDebugOverlay />
+                            {/* <MobileDebugOverlay /> */}
                             {/* <AnkiConnectDebugOverlay /> */}
                             <OnlineStatusOverlay />
                             <ServiceWorkerRegistration />

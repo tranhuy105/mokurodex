@@ -1,5 +1,5 @@
 import EpubReaderContainer from "@/components/reader/epub/EpubReaderContainer";
-import { EpubReaderSkeleton } from "@/components/reader/epub/EpubReaderSkeleton";
+import { LoadingOverlay } from "@/components/reader/epub/LoadingOverlay";
 import { decodeUrlParam } from "@/lib/path-utils";
 import { getContentWithVolumes } from "@/server/actions/manga-reader";
 import { notFound } from "next/navigation";
@@ -53,7 +53,17 @@ export default async function EpubReaderPage({
 
         // Render the EPUB reader component with initial data
         return (
-            <Suspense fallback={<EpubReaderSkeleton />}>
+            <Suspense
+                fallback={
+                    <LoadingOverlay
+                        isLoading={true}
+                        title={"Getting the novel ready..."}
+                        description={
+                            "This may take a few seconds"
+                        }
+                    />
+                }
+            >
                 <EpubReaderContainer
                     contentId={contentId}
                     volume={currentVolume}

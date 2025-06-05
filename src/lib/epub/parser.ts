@@ -108,6 +108,7 @@ export async function parseEpub(
         chapters,
         images,
         spine: spineItems,
+        manifestMap,
     };
 }
 
@@ -119,43 +120,54 @@ function extractMetadata(
 ): EpubMetadata {
     const metadata: EpubMetadata = {};
 
+    console.log("metadataNode", metadataNode);
+
+    // Extract title from dc:title
     if (
-        metadataNode.title &&
-        Array.isArray(metadataNode.title) &&
-        metadataNode.title[0]
+        metadataNode["dc:title"] &&
+        Array.isArray(metadataNode["dc:title"]) &&
+        metadataNode["dc:title"][0]
     ) {
-        metadata.title = metadataNode.title[0] as string;
+        const titleObj = metadataNode["dc:title"][0] as {
+            _: string;
+        };
+        metadata.title = titleObj._;
     }
 
+    // Extract creator from dc:creator
     if (
-        metadataNode.creator &&
-        Array.isArray(metadataNode.creator) &&
-        metadataNode.creator[0]
+        metadataNode["dc:creator"] &&
+        Array.isArray(metadataNode["dc:creator"]) &&
+        metadataNode["dc:creator"][0]
     ) {
-        // Handle both string and object formats
-        const creator = metadataNode.creator[0];
-        metadata.creator =
-            typeof creator === "string"
-                ? creator
-                : (creator as { _: string })._;
+        const creatorObj = metadataNode[
+            "dc:creator"
+        ][0] as { _: string };
+        metadata.creator = creatorObj._;
     }
 
+    // Extract publisher from dc:publisher
     if (
-        metadataNode.publisher &&
-        Array.isArray(metadataNode.publisher) &&
-        metadataNode.publisher[0]
+        metadataNode["dc:publisher"] &&
+        Array.isArray(metadataNode["dc:publisher"]) &&
+        metadataNode["dc:publisher"][0]
     ) {
-        metadata.publisher = metadataNode
-            .publisher[0] as string;
+        const publisherObj = metadataNode[
+            "dc:publisher"
+        ][0] as { _: string };
+        metadata.publisher = publisherObj._;
     }
 
+    // Extract language from dc:language
     if (
-        metadataNode.language &&
-        Array.isArray(metadataNode.language) &&
-        metadataNode.language[0]
+        metadataNode["dc:language"] &&
+        Array.isArray(metadataNode["dc:language"]) &&
+        metadataNode["dc:language"][0]
     ) {
-        metadata.language = metadataNode
-            .language[0] as string;
+        // Language seems to be stored directly as string in the array
+        metadata.language = metadataNode[
+            "dc:language"
+        ][0] as string;
     }
 
     return metadata;
@@ -409,4 +421,72 @@ function createDefaultParsedEpub(): ParsedEpub {
         images: {},
         spine: [],
     };
+}
+
+/**
+ * Load a single chapter on demand
+ * Used for dynamically loading chapters as needed
+ */
+export async function loadChapterById(
+    epubZip: JSZip,
+    chapterId: string,
+    manifestMap: Record<string, ManifestItem>,
+    basePathPrefix: string
+): Promise<EpubChapter | null> {
+    const item = manifestMap[chapterId];
+    if (!item || !item.href) return null;
+
+    // Get the chapter content
+    const chapterPath = `${basePathPrefix}${item.href}`;
+    try {
+        const chapterContent =
+            (await epubZip
+                .file(chapterPath)
+                ?.async("text")) || "";
+
+        if (!chapterContent) return null;
+
+        return {
+            id: item.id,
+            href: item.href,
+            content: chapterContent,
+        };
+    } catch (error) {
+        console.error(
+            `Failed to load chapter ${chapterId}:`,
+            error
+        );
+        return null;
+    }
+}
+
+/**
+ * Get the next chapter ID from the spine
+ */
+export function getNextChapterId(
+    currentChapterId: string,
+    spine: string[]
+): string | null {
+    const currentIndex = spine.indexOf(currentChapterId);
+    if (
+        currentIndex === -1 ||
+        currentIndex === spine.length - 1
+    ) {
+        return null;
+    }
+    return spine[currentIndex + 1];
+}
+
+/**
+ * Get the previous chapter ID from the spine
+ */
+export function getPreviousChapterId(
+    currentChapterId: string,
+    spine: string[]
+): string | null {
+    const currentIndex = spine.indexOf(currentChapterId);
+    if (currentIndex <= 0) {
+        return null;
+    }
+    return spine[currentIndex - 1];
 }

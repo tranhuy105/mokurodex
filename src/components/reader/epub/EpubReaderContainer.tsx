@@ -1,6 +1,5 @@
 "use client";
 
-import { OfflineManager } from "@/components/pwa/OfflineManager";
 import { EpubReader } from "@/components/reader/epub/EpubReader";
 import { useEpubFileUrl } from "@/hooks/use-content";
 import {
@@ -14,6 +13,7 @@ import {
     useRef,
     useState,
 } from "react";
+import { LoadingOverlay } from "./LoadingOverlay";
 
 interface EpubReaderContainerProps {
     contentId: string;
@@ -58,8 +58,12 @@ export default function EpubReaderContainer({
     useEffect(() => {
         if (
             latestHistory &&
-            latestHistory.volumeId === volume.id
+            latestHistory.volumeId === volume.id &&
+            latestHistory.position > 0
         ) {
+            console.log(
+                `Setting initial position from history: ${latestHistory.position}%`
+            );
             setInitialPosition(latestHistory.position);
             setLastSavedPosition(latestHistory.position);
         }
@@ -68,7 +72,11 @@ export default function EpubReaderContainer({
     // Function to save reading position
     const saveReadingPosition = useCallback(
         (position: number) => {
-            if (position !== lastSavedPosition) {
+            if (
+                position !== lastSavedPosition &&
+                position > 0 &&
+                Math.abs(position - lastSavedPosition) >= 5
+            ) {
                 updateReadingHistory({
                     contentId,
                     volumeId: volume.id,
@@ -91,14 +99,15 @@ export default function EpubReaderContainer({
             clearTimeout(saveTimerRef.current);
         }
 
+        // Only save if position changed significantly (5% or more)
         if (
             currentPosition > 0 &&
-            Math.abs(currentPosition - lastSavedPosition) >
-                2
+            Math.abs(currentPosition - lastSavedPosition) >=
+                5
         ) {
             saveTimerRef.current = setTimeout(() => {
                 saveReadingPosition(currentPosition);
-            }, 2000);
+            }, 3000); // Increased debounce time to reduce saves
         }
 
         return () => {
@@ -148,11 +157,20 @@ export default function EpubReaderContainer({
     // Save position on unmount
     useEffect(() => {
         return () => {
-            if (currentPosition > 0) {
+            if (
+                currentPosition > 0 &&
+                Math.abs(
+                    currentPosition - lastSavedPosition
+                ) >= 5
+            ) {
                 saveReadingPosition(currentPosition);
             }
         };
-    }, [currentPosition, saveReadingPosition]);
+    }, [
+        currentPosition,
+        saveReadingPosition,
+        lastSavedPosition,
+    ]);
 
     // Handle scroll position changes from the EpubReader
     const handlePositionChange = useCallback(
@@ -177,14 +195,11 @@ export default function EpubReaderContainer({
 
     if (isLoading || !epubData) {
         return (
-            <div className="w-full h-screen bg-gray-900 flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-orange-500"></div>
-                    <p className="text-gray-400">
-                        Loading EPUB file...
-                    </p>
-                </div>
-            </div>
+            <LoadingOverlay
+                isLoading={isLoading}
+                title="Preparing EPUB file"
+                description="Please wait while we process the EPUB file"
+            />
         );
     }
 
@@ -197,7 +212,7 @@ export default function EpubReaderContainer({
                     initialPosition={initialPosition}
                 />
             </div>
-            <OfflineManager
+            {/* <OfflineManager
                 contentId={contentId}
                 contentTitle={
                     volume.volumeTitle || "Light Novel"
@@ -207,7 +222,7 @@ export default function EpubReaderContainer({
                 volumeNumber={volume.volumeNumber}
                 volumeTitle={volume.volumeTitle}
                 coverImage={volume.coverImage || undefined}
-            />
+            /> */}
         </div>
     );
 }
