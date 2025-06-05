@@ -76,6 +76,8 @@ const DoublePageMode = ({
     const [rtlVersion, setRtlVersion] = useState(0);
     const isMountedRef = useRef(true);
     const [isMounted, setIsMounted] = useState(false);
+    const [isTransitioning, setIsTransitioning] =
+        useState(false);
 
     // Add a state to track the current transform
     const [transform, setTransform] = useState({
@@ -203,17 +205,40 @@ const DoublePageMode = ({
         }
     }, [currentPage, onPageChange, isReady]);
 
-    // Reset zoom when page changes - optimize to prevent unnecessary state updates
-    useEffect(() => {
+    // Reset transform improved for better centering
+    const handleResetTransform = useCallback(() => {
         if (transformRef.current) {
-            // Prevent unnecessary resets if scale is already 1
-            if (scale !== 1) {
-                // Call resetTransform without async wrapper to avoid race conditions
-                transformRef.current.resetTransform(0); // Use 0ms duration for immediate reset
-            }
-            // State updates will be handled by onTransformed callback
+            // Set transitioning state to prevent race conditions
+            setIsTransitioning(true);
+
+            // Use requestAnimationFrame to ensure DOM has updated before transform
+            requestAnimationFrame(() => {
+                if (transformRef.current) {
+                    transformRef.current.resetTransform(0);
+
+                    // Clear transition state after reset completes
+                    setTimeout(() => {
+                        setIsTransitioning(false);
+                    }, 50);
+                }
+            });
         }
-    }, [adjustedCurrentPage, leftPage, rightPage, scale]);
+    }, []);
+
+    // Enhanced reset logic for page changes
+    useEffect(() => {
+        if (
+            transformRef.current &&
+            (leftPage || rightPage)
+        ) {
+            handleResetTransform();
+        }
+    }, [
+        adjustedCurrentPage,
+        leftPage,
+        rightPage,
+        handleResetTransform,
+    ]);
 
     // Prevent wheel scrolling on the container when zoomed - more comprehensive approach
     useEffect(() => {
@@ -371,6 +396,12 @@ const DoublePageMode = ({
                 doubleClick={{
                     disabled: false,
                 }}
+                alignmentAnimation={{
+                    sizeX: 0,
+                    sizeY: 0,
+                    animationTime: 0,
+                    animationType: "linear",
+                }}
                 onTransformed={(ref) => {
                     if (isMountedRef.current) {
                         const newScale = ref.state.scale;
@@ -397,9 +428,9 @@ const DoublePageMode = ({
                     }
                 }}
                 ref={transformRef}
-                alignmentAnimation={{
-                    sizeX: 0,
-                    sizeY: 0,
+                panning={{
+                    disabled: isTransitioning,
+                    velocityDisabled: isTransitioning,
                 }}
             >
                 {({ zoomIn, zoomOut, resetTransform }) => (

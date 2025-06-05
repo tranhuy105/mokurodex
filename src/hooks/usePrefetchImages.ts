@@ -105,6 +105,14 @@ export function usePrefetchImages(
                     ]),
                 }));
 
+                // Use crossOrigin to enable proper caching while avoiding CORS issues
+                img.crossOrigin = "anonymous";
+
+                // Force the image to be cacheable
+                img.fetchPriority = "high";
+                img.decoding = "async";
+
+                // Finally set the src to start loading
                 img.src = imagePath;
             });
         },

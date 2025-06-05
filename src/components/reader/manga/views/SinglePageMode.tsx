@@ -65,6 +65,8 @@ const SinglePageMode = ({
     const containerRef = useRef<HTMLDivElement>(null);
     const isMountedRef = useRef(true);
     const [isMounted, setIsMounted] = useState(false);
+    const [isTransitioning, setIsTransitioning] =
+        useState(false);
 
     // Memoize the current page to prevent unnecessary re-renders
     const page = useMemo(
@@ -79,11 +81,24 @@ const SinglePageMode = ({
         positionY: 0,
     });
 
-    const handleResetTransform = () => {
+    const handleResetTransform = useCallback(() => {
         if (transformRef.current) {
-            transformRef.current.resetTransform();
+            // Set transitioning state to prevent race conditions
+            setIsTransitioning(true);
+
+            // Use requestAnimationFrame to ensure DOM has updated before transform
+            requestAnimationFrame(() => {
+                if (transformRef.current) {
+                    transformRef.current.resetTransform(0);
+
+                    // Clear transition state after reset completes
+                    setTimeout(() => {
+                        setIsTransitioning(false);
+                    }, 50);
+                }
+            });
         }
-    };
+    }, []);
 
     // Preload adjacent pages - can be kept for backward compatibility
     const preloadAdjacentPages = useCallback(() => {
@@ -302,6 +317,13 @@ const SinglePageMode = ({
         };
     }, [isZoomed]);
 
+    // Reset transform when page changes
+    useEffect(() => {
+        if (transformRef.current && page) {
+            handleResetTransform();
+        }
+    }, [currentPage, page, handleResetTransform]);
+
     // Memoize the PageView component to prevent unnecessary re-renders
     const pageViewComponent = useMemo(() => {
         if (!page) return null;
@@ -372,6 +394,12 @@ const SinglePageMode = ({
                 doubleClick={{
                     disabled: false,
                 }}
+                alignmentAnimation={{
+                    sizeX: 0,
+                    sizeY: 0,
+                    animationTime: 0,
+                    animationType: "linear",
+                }}
                 onTransformed={(ref) => {
                     if (isMountedRef.current) {
                         const newScale = ref.state.scale;
@@ -398,6 +426,10 @@ const SinglePageMode = ({
                     }
                 }}
                 ref={transformRef}
+                panning={{
+                    disabled: isTransitioning,
+                    velocityDisabled: isTransitioning,
+                }}
             >
                 {() => (
                     <>

@@ -71,6 +71,11 @@ export default function MangaReaderContainer({
     // Track if this is the first render
     const isFirstRender = useRef(true);
 
+    // Add at the top near other refs
+    const navigationTimeoutRef = useRef<ReturnType<
+        typeof setTimeout
+    > | null>(null);
+
     // Memoize the MangaReader props to prevent unnecessary rerenders
     const readerProps = useMemo(
         () => ({
@@ -221,6 +226,11 @@ export default function MangaReaderContainer({
                 return;
             }
 
+            // Clear any existing navigation timeout
+            if (navigationTimeoutRef.current) {
+                clearTimeout(navigationTimeoutRef.current);
+            }
+
             // Prevent rapid navigation
             isNavigatingRef.current = true;
 
@@ -230,7 +240,16 @@ export default function MangaReaderContainer({
             // Update state in next tick to batch with other updates
             Promise.resolve().then(() => {
                 setCurrentPage(newPage);
-                isNavigatingRef.current = false;
+
+                // Add a small delay before allowing another navigation
+                // This prevents race conditions with rapid page changes
+                navigationTimeoutRef.current = setTimeout(
+                    () => {
+                        isNavigatingRef.current = false;
+                        navigationTimeoutRef.current = null;
+                    },
+                    300
+                );
             });
 
             // Schedule async updates
@@ -353,7 +372,7 @@ export default function MangaReaderContainer({
         initialVolume,
     ]);
 
-    // Cleanup on unmount
+    // Add cleanup for navigation timeout in the cleanup useEffect
     useEffect(() => {
         return () => {
             if (pendingUpdatesRef.current.urlUpdate) {
@@ -365,6 +384,9 @@ export default function MangaReaderContainer({
                 clearTimeout(
                     pendingUpdatesRef.current.dbSave
                 );
+            }
+            if (navigationTimeoutRef.current) {
+                clearTimeout(navigationTimeoutRef.current);
             }
         };
     }, []);

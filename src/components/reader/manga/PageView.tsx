@@ -123,6 +123,14 @@ const PageView = memo(function PageView({
         if (checkPrefetchStatus()) {
             setIsLoading(false);
             setImageError(false);
+
+            // Make sure the imageUrl is set correctly even when using cached image
+            if (
+                page.imagePath &&
+                page.imagePath !== imageUrl
+            ) {
+                setImageUrl(page.imagePath);
+            }
             return;
         }
 
@@ -144,7 +152,7 @@ const PageView = memo(function PageView({
                 }
             }
         }, 5000);
-    }, [page, pageNumber, checkPrefetchStatus]);
+    }, [page, pageNumber, checkPrefetchStatus, imageUrl]);
 
     // Optimize mobile detection with single listener
     useEffect(() => {
@@ -309,6 +317,8 @@ const PageView = memo(function PageView({
             clearTimeout(loadTimeoutRef.current);
         }
 
+        // Only create a new image object if we really need to preload
+        // This avoids redundant network requests for already cached images
         const img = new Image();
         img.onload = handleImageLoad;
         img.onerror = () => {
@@ -322,6 +332,9 @@ const PageView = memo(function PageView({
             retryCount > 0
                 ? `${imageUrl}?t=${Date.now()}`
                 : imageUrl;
+
+        // Set crossOrigin to anonymous to avoid CORS issues but still leverage cache
+        img.crossOrigin = "anonymous";
         img.src = url;
 
         loadTimeoutRef.current = setTimeout(() => {
@@ -502,6 +515,7 @@ const PageView = memo(function PageView({
                                         : "eager"
                                 }
                                 decoding="async"
+                                crossOrigin="anonymous"
                             />
                         </div>
 
