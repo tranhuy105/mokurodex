@@ -77,6 +77,13 @@ const DoublePageMode = ({
     const isMountedRef = useRef(true);
     const [isMounted, setIsMounted] = useState(false);
 
+    // Add a state to track the current transform
+    const [transform, setTransform] = useState({
+        scale: 1,
+        positionX: 0,
+        positionY: 0,
+    });
+
     // Cleanup on unmount
     useEffect(() => {
         isMountedRef.current = true;
@@ -120,7 +127,7 @@ const DoublePageMode = ({
             adjustedCurrentPage > 1 &&
             onPageChange &&
             !isCropperOpen &&
-            !isZoomed
+            scale <= 1.1 // Only block navigation if significantly zoomed
         ) {
             // Move back two pages
             onPageChange(adjustedCurrentPage - 2);
@@ -129,7 +136,7 @@ const DoublePageMode = ({
         adjustedCurrentPage,
         onPageChange,
         isCropperOpen,
-        isZoomed,
+        scale,
     ]);
 
     const handleNextPage = useCallback(() => {
@@ -137,7 +144,7 @@ const DoublePageMode = ({
             adjustedCurrentPage + 1 < pages.length &&
             onPageChange &&
             !isCropperOpen &&
-            !isZoomed
+            scale <= 1.1 // Only block navigation if significantly zoomed
         ) {
             // Move forward two pages
             onPageChange(adjustedCurrentPage + 2);
@@ -147,7 +154,7 @@ const DoublePageMode = ({
         onPageChange,
         pages.length,
         isCropperOpen,
-        isZoomed,
+        scale,
     ]);
 
     // Preload adjacent pages using ref, not state
@@ -299,6 +306,7 @@ const DoublePageMode = ({
                 mode="single"
                 isLoaded={isLoaded}
                 isPrefetching={isPrefetching}
+                transform={transform}
             />
         );
     }, [
@@ -309,6 +317,7 @@ const DoublePageMode = ({
         rtlVersion,
         isLoaded,
         isPrefetching,
+        transform,
     ]);
 
     const rightPageView = useMemo(() => {
@@ -327,6 +336,7 @@ const DoublePageMode = ({
                 mode="single"
                 isLoaded={isLoaded}
                 isPrefetching={isPrefetching}
+                transform={transform}
             />
         );
     }, [
@@ -337,6 +347,7 @@ const DoublePageMode = ({
         rtlVersion,
         isLoaded,
         isPrefetching,
+        transform,
     ]);
 
     return (
@@ -363,6 +374,18 @@ const DoublePageMode = ({
                 onTransformed={(ref) => {
                     if (isMountedRef.current) {
                         const newScale = ref.state.scale;
+                        const newPositionX =
+                            ref.state.positionX;
+                        const newPositionY =
+                            ref.state.positionY;
+
+                        // Update transform state
+                        setTransform({
+                            scale: newScale,
+                            positionX: newPositionX,
+                            positionY: newPositionY,
+                        });
+
                         // Only update zoom state when there's an actual change
                         if (
                             Math.abs(newScale - scale) >

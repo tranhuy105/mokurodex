@@ -25,6 +25,11 @@ interface PageViewProps {
     isLoaded?: (imagePath: string) => boolean;
     isPrefetching?: (imagePath: string) => boolean;
     onLoadImage?: () => void;
+    transform?: {
+        scale: number;
+        positionX: number;
+        positionY: number;
+    };
 }
 
 // Memoize the PageView component to prevent unnecessary re-renders
@@ -37,6 +42,7 @@ const PageView = memo(function PageView({
     isLoaded,
     isPrefetching,
     onLoadImage,
+    transform,
 }: PageViewProps) {
     // For single/double mode, get the page from the pages array if not directly passed
     const page =
@@ -502,14 +508,34 @@ const PageView = memo(function PageView({
                         {/* TextBoxes overlay */}
                         {settings.showTooltips !==
                             false && (
-                            <TextBoxes
-                                blocks={
-                                    page.textBlocks || []
-                                }
-                                settings={settings}
-                                imgWidth={page.width}
-                                imgHeight={page.height}
-                            />
+                            <div
+                                className="absolute inset-0 pointer-events-none"
+                                style={{
+                                    position: "absolute",
+                                    top: 0,
+                                    left: 0,
+                                    width: `${page.width}px`,
+                                    height: `${page.height}px`,
+                                    transform: transform
+                                        ? `scale(${
+                                              1 /
+                                              transform.scale
+                                          })`
+                                        : "scale(1)",
+                                    transformOrigin:
+                                        "top left",
+                                }}
+                            >
+                                <TextBoxes
+                                    blocks={
+                                        page.textBlocks ||
+                                        []
+                                    }
+                                    settings={settings}
+                                    imgWidth={page.width}
+                                    imgHeight={page.height}
+                                />
+                            </div>
                         )}
                     </div>
                 )}
