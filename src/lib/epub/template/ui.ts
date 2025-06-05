@@ -11,6 +11,14 @@ export const readerUIfromContent = (content: string) => {
             <h1 class="reader-title" id="reader-book-title">Loading Book...</h1>
         </div>
         <div class="reader-controls">
+            <button class="reader-btn font-size-btn" id="font-size-btn" aria-label="Font Size">
+                <span>Aa</span>
+            </button>
+            <button class="reader-btn" id="fullscreen-btn" aria-label="Toggle Fullscreen">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M7 3H3V7M21 3H17V7M17 21H21V17M3 17V21H7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
             <button class="reader-btn" id="toggle-toc" aria-label="Table of Contents">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M3 5H21M3 12H21M3 19H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -23,7 +31,10 @@ export const readerUIfromContent = (content: string) => {
         <div class="reader-progress-chapters" id="progress-chapters"></div>
         <div class="reader-progress-handle" id="progress-handle">
             <div class="handle-circle"></div>
-            <div class="progress-tooltip" id="progress-tooltip">0%</div>
+            <div class="progress-tooltip" id="progress-tooltip">
+                <div class="tooltip-position" id="tooltip-position">0%</div>
+                <div class="tooltip-chapter" id="chapter-progress">0% of chapter left</div>
+            </div>
         </div>
     </div>
     <div class="reader-content" id="reader-content">
@@ -36,16 +47,13 @@ export const readerUIfromContent = (content: string) => {
         </div>
     </div>
     
-    <div class="reader-progress-info" id="progress-info">
-        <div class="progress-info-chapter">
-            <span class="progress-info-label">Chapter:</span>
-            <span class="progress-info-value" id="chapter-progress">50% left</span>
-        </div>
-        <div class="progress-info-book">
-            <span class="progress-info-label">Book:</span>
-            <span class="progress-info-value" id="book-progress">79%</span>
-        </div>
+    <div class="font-size-menu" id="font-size-menu">
+        <button class="font-size-option" data-size="small">Small</button>
+        <button class="font-size-option" data-size="medium">Medium</button>
+        <button class="font-size-option" data-size="large">Large</button>
+        <button class="font-size-option" data-size="x-large">X-Large</button>
     </div>
+    
     <div class="reader-sidebar" id="reader-sidebar">
         <div class="sidebar-header">
             <h2 class="sidebar-title">Table of Contents</h2>

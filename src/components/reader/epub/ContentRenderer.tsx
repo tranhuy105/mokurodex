@@ -11,6 +11,77 @@ export function ContentRenderer({
     containerRef,
     saveReadingPosition,
 }: ContentRendererProps) {
+    // Function to scroll to element while accounting for header height
+    const scrollToElementWithHeaderOffset = (
+        element: Element
+    ) => {
+        if (!element) return;
+
+        const readerContent = document.getElementById(
+            "reader-content"
+        );
+        const header = document.querySelector(
+            ".reader-header"
+        );
+
+        if (readerContent && header) {
+            const headerHeight =
+                header.getBoundingClientRect().height;
+
+            // Get the element's position relative to the document
+            const elementRect =
+                element.getBoundingClientRect();
+            const readerRect =
+                readerContent.getBoundingClientRect();
+
+            // Calculate the actual position in the scrollable area
+            // This is the element's position relative to the top of the reader content
+            const elementPositionInReader =
+                elementRect.top -
+                readerRect.top +
+                readerContent.scrollTop;
+
+            // Apply the header offset (subtract header height)
+            const offsetPosition =
+                elementPositionInReader - headerHeight - 10; // 10px extra padding
+
+            // Scroll with smooth behavior
+            readerContent.scrollTo({
+                top: offsetPosition,
+                behavior: "smooth",
+            });
+
+            // Update position after scrolling (to fix any precision issues)
+            setTimeout(() => {
+                const newElementRect =
+                    element.getBoundingClientRect();
+                const newHeaderRect =
+                    header.getBoundingClientRect();
+
+                // Check if element is now properly below the header
+                if (
+                    newElementRect.top <
+                    newHeaderRect.bottom + 5
+                ) {
+                    // Fine tune the position
+                    readerContent.scrollBy({
+                        top:
+                            newElementRect.top -
+                            newHeaderRect.bottom -
+                            5,
+                        behavior: "auto",
+                    });
+                }
+            }, 400); // Wait for smooth scroll to finish
+        } else {
+            // Fallback to default behavior if elements not found
+            element.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+            });
+        }
+    };
+
     // Keep track of whether content has been rendered
     const contentRenderedRef = useRef(false);
     const touchStartXRef = useRef(0);
@@ -140,6 +211,12 @@ export function ContentRenderer({
 
                 // Set up touch gestures for mobile
                 setupTouchGestures();
+
+                // Set up font size button
+                setupFontSizeButton();
+
+                // Set up fullscreen button
+                setupFullscreenButton();
             }, 100);
         }
     }, [content]);
@@ -238,16 +315,12 @@ export function ContentRenderer({
         );
         const progressBar =
             document.getElementById("progress-bar");
-        const progressInfo =
-            document.getElementById("progress-info");
         const progressHandle = document.getElementById(
             "progress-handle"
         );
-        const progressTooltip = document.getElementById(
-            "progress-tooltip"
+        const tooltipPosition = document.getElementById(
+            "tooltip-position"
         );
-        const bookProgress =
-            document.getElementById("book-progress");
         const chapterProgress = document.getElementById(
             "chapter-progress"
         );
@@ -276,14 +349,9 @@ export function ContentRenderer({
             progressHandle.style.left = `${percentage}%`;
         }
 
-        // Update tooltip
-        if (progressTooltip instanceof HTMLElement) {
-            progressTooltip.textContent = `${percentage}%`;
-        }
-
-        // Update book progress in the info panel
-        if (bookProgress instanceof HTMLElement) {
-            bookProgress.textContent = `${percentage}%`;
+        // Update tooltip position percentage
+        if (tooltipPosition instanceof HTMLElement) {
+            tooltipPosition.textContent = `${percentage}%`;
         }
 
         // Find current chapter and update chapter progress
@@ -365,7 +433,7 @@ export function ContentRenderer({
                             100 - chapterPercentage
                         );
 
-                        chapterProgress.textContent = `${chapterRemaining}% left`;
+                        chapterProgress.textContent = `${chapterRemaining}% of chapter left`;
                     }
                 }
             } catch (error) {
@@ -374,22 +442,6 @@ export function ContentRenderer({
                     error
                 );
             }
-        }
-
-        // Show progress info
-        if (progressInfo) {
-            progressInfo.classList.add("active");
-
-            // Use a ref-based timeout to avoid React state
-            if (progressTimeoutRef.current) {
-                clearTimeout(progressTimeoutRef.current);
-            }
-
-            progressTimeoutRef.current = setTimeout(() => {
-                if (progressInfo) {
-                    progressInfo.classList.remove("active");
-                }
-            }, 2000);
         }
 
         // Dispatch a custom event to notify parent components about position change
@@ -577,10 +629,11 @@ export function ContentRenderer({
                     li.textContent = part.title;
 
                     li.addEventListener("click", () => {
-                        // Scroll to part
-                        part.element.scrollIntoView({
-                            behavior: "smooth",
-                        });
+                        // Scroll to part with header offset
+                        scrollToElementWithHeaderOffset(
+                            part.element
+                        );
+
                         // Close sidebar
                         sidebar?.classList.remove("active");
                         overlay?.classList.remove("active");
@@ -618,13 +671,11 @@ export function ContentRenderer({
                             subLi.addEventListener(
                                 "click",
                                 () => {
-                                    // Scroll to chapter
-                                    chapter.element.scrollIntoView(
-                                        {
-                                            behavior:
-                                                "smooth",
-                                        }
+                                    // Scroll to chapter with header offset
+                                    scrollToElementWithHeaderOffset(
+                                        chapter.element
                                     );
+
                                     // Close sidebar
                                     sidebar?.classList.remove(
                                         "active"
@@ -720,9 +771,9 @@ export function ContentRenderer({
                             );
 
                         if (target) {
-                            target.scrollIntoView({
-                                behavior: "smooth",
-                            });
+                            scrollToElementWithHeaderOffset(
+                                target
+                            );
 
                             // Calculate and update progress bar based on scroll position
                             const readerContent =
@@ -810,9 +861,9 @@ export function ContentRenderer({
                     );
 
                 if (chapterElement) {
-                    chapterElement.scrollIntoView({
-                        behavior: "smooth",
-                    });
+                    scrollToElementWithHeaderOffset(
+                        chapterElement
+                    );
 
                     // Calculate and update progress bar based on scroll position
                     const readerContent =
@@ -919,10 +970,8 @@ export function ContentRenderer({
                             }
 
                             if (targetChapter) {
-                                targetChapter.scrollIntoView(
-                                    {
-                                        behavior: "smooth",
-                                    }
+                                scrollToElementWithHeaderOffset(
+                                    targetChapter
                                 );
 
                                 // Calculate and update progress bar
@@ -961,15 +1010,6 @@ export function ContentRenderer({
                                         );
                                     if (progressHandle) {
                                         progressHandle.style.left = `${percentage}%`;
-                                    }
-
-                                    // Update tooltip
-                                    const progressTooltip =
-                                        document.getElementById(
-                                            "progress-tooltip"
-                                        );
-                                    if (progressTooltip) {
-                                        progressTooltip.textContent = `${percentage}%`;
                                     }
                                 }, 100);
 
@@ -1256,8 +1296,6 @@ export function ContentRenderer({
         );
         const progressBar =
             document.getElementById("progress-bar");
-        const progressInfo =
-            document.getElementById("progress-info");
         const readerContent = document.getElementById(
             "reader-content"
         );
@@ -1294,12 +1332,14 @@ export function ContentRenderer({
             // Update progress bar width
             progressBar.style.width = `${percentage}%`;
 
-            // Update progress info
-            if (progressInfo) {
-                progressInfo.textContent = `${Math.round(
+            // Update tooltip position
+            const tooltipPosition = document.getElementById(
+                "tooltip-position"
+            );
+            if (tooltipPosition) {
+                tooltipPosition.textContent = `${Math.round(
                     percentage
-                )}% of book`;
-                progressInfo.classList.add("active");
+                )}%`;
             }
 
             return percentage;
@@ -1320,6 +1360,9 @@ export function ContentRenderer({
                 behavior: "auto", // Use "auto" for immediate response during dragging
             });
 
+            // Update chapter progress
+            updateChapterProgress(percentage);
+
             // Dispatch position change event
             const positionChangeEvent = new CustomEvent(
                 "reader-position-change",
@@ -1328,6 +1371,101 @@ export function ContentRenderer({
                 }
             );
             document.dispatchEvent(positionChangeEvent);
+        };
+
+        // Function to update chapter progress
+        const updateChapterProgress = (
+            percentage: number
+        ) => {
+            const chapterProgress = document.getElementById(
+                "chapter-progress"
+            );
+            if (!chapterProgress) return;
+
+            try {
+                // Use the same logic as in script.ts to calculate chapter percentage
+                const tocDataMeta = document.querySelector(
+                    'meta[name="toc-data"]'
+                );
+                if (
+                    tocDataMeta &&
+                    tocDataMeta.getAttribute("content")
+                ) {
+                    const tocItems = JSON.parse(
+                        tocDataMeta.getAttribute(
+                            "content"
+                        ) || "[]"
+                    );
+                    if (tocItems && tocItems.length > 0) {
+                        // Filter to top-level items and sort by position
+                        const chapters = tocItems
+                            .filter(
+                                (item: { level: number }) =>
+                                    item.level === 0
+                            )
+                            .sort(
+                                (
+                                    a: { position: number },
+                                    b: { position: number }
+                                ) => a.position - b.position
+                            );
+
+                        // Find current chapter
+                        let currentChapter = chapters[0];
+                        let currentChapterIndex = 0;
+
+                        for (
+                            let i = 0;
+                            i < chapters.length;
+                            i++
+                        ) {
+                            if (
+                                chapters[i].position <=
+                                percentage
+                            ) {
+                                currentChapter =
+                                    chapters[i];
+                                currentChapterIndex = i;
+                            } else {
+                                break;
+                            }
+                        }
+
+                        // Calculate chapter percentage
+                        const chapterStart =
+                            currentChapter.position;
+                        const chapterEnd =
+                            currentChapterIndex <
+                            chapters.length - 1
+                                ? chapters[
+                                      currentChapterIndex +
+                                          1
+                                  ].position
+                                : 100;
+                        const chapterLength =
+                            chapterEnd - chapterStart;
+                        const positionInChapter =
+                            percentage - chapterStart;
+                        const chapterPercentage =
+                            Math.round(
+                                (positionInChapter /
+                                    chapterLength) *
+                                    100
+                            );
+                        const chapterRemaining = Math.max(
+                            0,
+                            100 - chapterPercentage
+                        );
+
+                        chapterProgress.textContent = `${chapterRemaining}% of chapter left`;
+                    }
+                }
+            } catch (error) {
+                console.error(
+                    "Error updating chapter progress:",
+                    error
+                );
+            }
         };
 
         // Mouse events
@@ -1353,13 +1491,6 @@ export function ContentRenderer({
             if (!isDragging) return;
             isDragging = false;
             document.body.style.userSelect = "";
-
-            // Hide progress info after a delay
-            if (progressInfo) {
-                setTimeout(() => {
-                    progressInfo.classList.remove("active");
-                }, 2000);
-            }
         });
 
         // Touch events for mobile
@@ -1383,21 +1514,41 @@ export function ContentRenderer({
                 );
                 scrollToPosition(percentage);
             },
-            { passive: true }
+            { passive: false }
         );
 
-        document.addEventListener("touchend", () => {
+        const endDragTouch = () => {
             if (!isDragging) return;
             isDragging = false;
             document.body.style.userSelect = "";
+        };
 
-            // Hide progress info after a delay
-            if (progressInfo) {
-                setTimeout(() => {
-                    progressInfo.classList.remove("active");
-                }, 2000);
-            }
+        document.addEventListener(
+            "touchend",
+            endDragTouch,
+            { passive: true }
+        );
+        document.addEventListener(
+            "touchcancel",
+            endDragTouch,
+            { passive: true }
+        );
+
+        // Additional safety for mobile
+        window.addEventListener("blur", endDragTouch, {
+            passive: true,
         });
+        window.addEventListener(
+            "visibilitychange",
+            () => {
+                if (
+                    document.visibilityState !== "visible"
+                ) {
+                    endDragTouch();
+                }
+            },
+            { passive: true }
+        );
 
         // Click on progress bar to jump to position
         progressContainer.addEventListener("click", (e) => {
@@ -1414,13 +1565,6 @@ export function ContentRenderer({
                 e.clientX
             );
             scrollToPosition(percentage);
-
-            // Hide progress info after a delay
-            if (progressInfo) {
-                setTimeout(() => {
-                    progressInfo.classList.remove("active");
-                }, 2000);
-            }
         });
 
         // Add to window.literaReader
@@ -1443,6 +1587,201 @@ export function ContentRenderer({
                     progressHandle.style.left = `${position}%`;
                 }
             };
+        }
+    };
+
+    // Set up font size button
+    const setupFontSizeButton = () => {
+        const fontSizeBtn =
+            document.getElementById("font-size-btn");
+        const fontSizeMenu = document.getElementById(
+            "font-size-menu"
+        );
+        const fontSizeOptions = document.querySelectorAll(
+            ".font-size-option"
+        );
+        const readerContainer = document.querySelector(
+            ".litera-reader"
+        );
+
+        if (
+            !fontSizeBtn ||
+            !fontSizeMenu ||
+            !readerContainer
+        )
+            return;
+
+        try {
+            // Set default font size or restore from localStorage
+            const savedFontSize =
+                localStorage.getItem("reader-font-size") ||
+                "medium";
+            readerContainer.classList.add(
+                `font-size-${savedFontSize}`
+            );
+
+            // Mark the active option
+            fontSizeOptions.forEach((option) => {
+                if (
+                    option.getAttribute("data-size") ===
+                    savedFontSize
+                ) {
+                    option.classList.add("active");
+                }
+            });
+
+            // Toggle menu on button click
+            fontSizeBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                fontSizeMenu.classList.toggle("active");
+            });
+
+            // Handle font size selection
+            fontSizeOptions.forEach((option) => {
+                option.addEventListener("click", () => {
+                    const size =
+                        option.getAttribute("data-size");
+
+                    // Remove all font size classes
+                    readerContainer.classList.remove(
+                        "font-size-small",
+                        "font-size-medium",
+                        "font-size-large",
+                        "font-size-x-large"
+                    );
+
+                    // Add selected class
+                    if (size) {
+                        readerContainer.classList.add(
+                            `font-size-${size}`
+                        );
+                        localStorage.setItem(
+                            "reader-font-size",
+                            size
+                        );
+
+                        // Update active state
+                        fontSizeOptions.forEach((opt) =>
+                            opt.classList.remove("active")
+                        );
+                        option.classList.add("active");
+                    }
+
+                    // Close menu
+                    fontSizeMenu.classList.remove("active");
+
+                    // Recalculate progress after font size change
+                    setTimeout(() => {
+                        handleScroll();
+                    }, 100);
+                });
+            });
+
+            // Close menu when clicking outside
+            document.addEventListener("click", (e) => {
+                if (
+                    e.target !== fontSizeBtn &&
+                    !fontSizeMenu.contains(e.target as Node)
+                ) {
+                    fontSizeMenu.classList.remove("active");
+                }
+            });
+        } catch (error) {
+            console.error(
+                "Error setting up font size button:",
+                error
+            );
+        }
+    };
+
+    // Set up fullscreen button
+    const setupFullscreenButton = () => {
+        const fullscreenBtn = document.getElementById(
+            "fullscreen-btn"
+        );
+        const readerContainer = document.querySelector(
+            ".litera-reader"
+        );
+
+        if (!fullscreenBtn || !readerContainer) return;
+
+        try {
+            fullscreenBtn.addEventListener("click", () => {
+                if (!document.fullscreenElement) {
+                    // Enter fullscreen
+                    if (readerContainer.requestFullscreen) {
+                        readerContainer.requestFullscreen();
+                    } else if (
+                        "webkitRequestFullscreen" in
+                        readerContainer
+                    ) {
+                        (
+                            readerContainer as HTMLElement & {
+                                webkitRequestFullscreen(): Promise<void>;
+                            }
+                        ).webkitRequestFullscreen();
+                    } else if (
+                        "msRequestFullscreen" in
+                        readerContainer
+                    ) {
+                        (
+                            readerContainer as HTMLElement & {
+                                msRequestFullscreen(): Promise<void>;
+                            }
+                        ).msRequestFullscreen();
+                    }
+
+                    readerContainer.classList.add(
+                        "fullscreen"
+                    );
+                } else {
+                    // Exit fullscreen
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (
+                        "webkitExitFullscreen" in document
+                    ) {
+                        (
+                            document as Document & {
+                                webkitExitFullscreen(): Promise<void>;
+                            }
+                        ).webkitExitFullscreen();
+                    } else if (
+                        "msExitFullscreen" in document
+                    ) {
+                        (
+                            document as Document & {
+                                msExitFullscreen(): Promise<void>;
+                            }
+                        ).msExitFullscreen();
+                    }
+
+                    readerContainer.classList.remove(
+                        "fullscreen"
+                    );
+                }
+            });
+
+            // Update button when fullscreen state changes
+            document.addEventListener(
+                "fullscreenchange",
+                () => {
+                    if (document.fullscreenElement) {
+                        readerContainer.classList.add(
+                            "fullscreen"
+                        );
+                    } else {
+                        readerContainer.classList.remove(
+                            "fullscreen"
+                        );
+                    }
+                }
+            );
+        } catch (error) {
+            console.error(
+                "Error setting up fullscreen button:",
+                error
+            );
         }
     };
 
@@ -1492,6 +1831,48 @@ export function ContentRenderer({
                     () => {}
                 );
             }
+
+            // Clean up touch event listeners
+            document.removeEventListener(
+                "touchend",
+                () => {}
+            );
+            document.removeEventListener(
+                "touchcancel",
+                () => {}
+            );
+            window.removeEventListener("blur", () => {});
+            window.removeEventListener(
+                "visibilitychange",
+                () => {}
+            );
+
+            // Clean up font size button listener
+            const fontSizeBtn =
+                document.getElementById("font-size-btn");
+            if (fontSizeBtn) {
+                fontSizeBtn.removeEventListener(
+                    "click",
+                    () => {}
+                );
+            }
+
+            // Clean up fullscreen button listener
+            const fullscreenBtn = document.getElementById(
+                "fullscreen-btn"
+            );
+            if (fullscreenBtn) {
+                fullscreenBtn.removeEventListener(
+                    "click",
+                    () => {}
+                );
+            }
+
+            // Clean up fullscreen change listener
+            document.removeEventListener(
+                "fullscreenchange",
+                () => {}
+            );
 
             if (progressTimeoutRef.current) {
                 clearTimeout(progressTimeoutRef.current);

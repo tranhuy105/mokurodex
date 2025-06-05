@@ -22,9 +22,9 @@ export const getScript = (initialPosition: number) => {
                         }
                         
                         // Update progress tooltip
-                        const progressTooltip = document.getElementById('progress-tooltip');
-                        if (progressTooltip) {
-                            progressTooltip.textContent = Math.round(${initialPosition}) + '%';
+                        const tooltipPosition = document.getElementById('tooltip-position');
+                        if (tooltipPosition) {
+                            tooltipPosition.textContent = Math.round(${initialPosition}) + '%';
                         }
                         
                         // Update progress handle
@@ -37,16 +37,12 @@ export const getScript = (initialPosition: number) => {
                         updateProgressInfo(${initialPosition});
                     }
                     
-                    // Function to update both chapter and book progress info
+                    // Function to update chapter progress info in tooltip
                     function updateProgressInfo(bookPercentage) {
                         // Get chapter progress (this is a mock - you'll need to implement actual chapter tracking)
-                        // For now, we'll simulate chapter progress based on book progress and current chapter bounds
                         const chapterProgress = document.getElementById('chapter-progress');
-                        const bookProgress = document.getElementById('book-progress');
                         
-                        if (chapterProgress && bookProgress) {
-                            // Calculate chapter percentage (mock calculation - replace with actual logic)
-                            // This assumes we know the start and end percentages of the current chapter
+                        if (chapterProgress) {
                             const currentChapterStart = getCurrentChapterStart();
                             const currentChapterEnd = getCurrentChapterEnd();
                             
@@ -56,31 +52,10 @@ export const getScript = (initialPosition: number) => {
                                 const chapterPercentage = Math.round((positionInChapter / chapterLength) * 100);
                                 const chapterRemaining = Math.max(0, 100 - chapterPercentage);
                                 
-                                chapterProgress.textContent = chapterRemaining + '% left';
+                                chapterProgress.textContent = chapterRemaining + '% of chapter left';
                             } else {
-                                chapterProgress.textContent = 'Unknown';
+                                chapterProgress.textContent = 'Chapter progress unknown';
                             }
-                            
-                            // Update book progress
-                            bookProgress.textContent = Math.round(bookPercentage) + '%';
-                        }
-                        
-                        // Make sure the progress info is shown when dragging
-                        const progressInfo = document.getElementById('progress-info');
-                        if (progressInfo) {
-                            progressInfo.classList.add('active');
-                            
-                            // Keep it visible for 2 seconds after last update
-                            // @ts-ignore - Add global timeout reference
-                            if (window.progressInfoTimeout) {
-                                // @ts-ignore
-                                clearTimeout(window.progressInfoTimeout);
-                            }
-                            
-                            // @ts-ignore
-                            window.progressInfoTimeout = setTimeout(function() {
-                                progressInfo.classList.remove('active');
-                            }, 2000);
                         }
                     }
                     
@@ -195,6 +170,135 @@ export const getScript = (initialPosition: number) => {
                         }, 500);
                     }
                     
+                    // Initialize font size controls
+                    function initializeFontSizeControls() {
+                        const fontSizeBtn = document.getElementById('font-size-btn');
+                        const fontSizeMenu = document.getElementById('font-size-menu');
+                        const fontSizeOptions = document.querySelectorAll('.font-size-option');
+                        const readerContainer = document.querySelector('.litera-reader');
+                        
+                        if (!fontSizeBtn || !fontSizeMenu || !readerContainer) return;
+                        
+                        // Set default font size or restore from localStorage
+                        const savedFontSize = localStorage.getItem('reader-font-size') || 'medium';
+                        readerContainer.classList.add('font-size-' + savedFontSize);
+                        
+                        // Mark the active option
+                        fontSizeOptions.forEach(option => {
+                            if (option.getAttribute('data-size') === savedFontSize) {
+                                option.classList.add('active');
+                            }
+                        });
+                        
+                        // Toggle menu on button click
+                        fontSizeBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            fontSizeMenu.classList.toggle('active');
+                        });
+                        
+                        // Handle font size selection
+                        fontSizeOptions.forEach(option => {
+                            option.addEventListener('click', () => {
+                                const size = option.getAttribute('data-size');
+                                
+                                // Remove all font size classes
+                                readerContainer.classList.remove(
+                                    'font-size-small', 
+                                    'font-size-medium', 
+                                    'font-size-large', 
+                                    'font-size-x-large'
+                                );
+                                
+                                // Add selected class
+                                if (size) {
+                                    readerContainer.classList.add('font-size-' + size);
+                                    localStorage.setItem('reader-font-size', size);
+                                    
+                                    // Update active state
+                                    fontSizeOptions.forEach(opt => opt.classList.remove('active'));
+                                    option.classList.add('active');
+                                }
+                                
+                                // Close menu
+                                fontSizeMenu.classList.remove('active');
+                                
+                                // Wait for reflow, then update progress
+                                setTimeout(() => {
+                                    // Recalculate progress after font size change
+                                    const readerContent = document.getElementById('reader-content');
+                                    if (readerContent) {
+                                        const scrollHeight = readerContent.scrollHeight - readerContent.clientHeight;
+                                        const scrollPosition = readerContent.scrollTop;
+                                        const percentage = Math.round((scrollPosition / scrollHeight) * 100);
+                                        
+                                        // Update progress bar and info
+                                        const progressBar = document.getElementById('progress-bar');
+                                        if (progressBar) {
+                                            progressBar.style.width = percentage + '%';
+                                        }
+                                        
+                                        const progressHandle = document.getElementById('progress-handle');
+                                        if (progressHandle) {
+                                            progressHandle.style.left = percentage + '%';
+                                        }
+                                        
+                                        updateProgressInfo(percentage);
+                                    }
+                                }, 100);
+                            });
+                        });
+                        
+                        // Close menu when clicking outside
+                        document.addEventListener('click', (e) => {
+                            if (e.target !== fontSizeBtn && !fontSizeMenu.contains(e.target as Node)) {
+                                fontSizeMenu.classList.remove('active');
+                            }
+                        });
+                    }
+                    
+                    // Initialize fullscreen functionality
+                    function initializeFullscreen() {
+                        const fullscreenBtn = document.getElementById('fullscreen-btn');
+                        const readerContainer = document.querySelector('.litera-reader');
+                        
+                        if (!fullscreenBtn || !readerContainer) return;
+                        
+                        fullscreenBtn.addEventListener('click', () => {
+                            if (!document.fullscreenElement) {
+                                // Enter fullscreen
+                                if (readerContainer.requestFullscreen) {
+                                    readerContainer.requestFullscreen();
+                                } else if ((readerContainer as any).webkitRequestFullscreen) {
+                                    (readerContainer as any).webkitRequestFullscreen();
+                                } else if ((readerContainer as any).msRequestFullscreen) {
+                                    (readerContainer as any).msRequestFullscreen();
+                                }
+                                
+                                readerContainer.classList.add('fullscreen');
+                            } else {
+                                // Exit fullscreen
+                                if (document.exitFullscreen) {
+                                    document.exitFullscreen();
+                                } else if ((document as any).webkitExitFullscreen) {
+                                    (document as any).webkitExitFullscreen();
+                                } else if ((document as any).msExitFullscreen) {
+                                    (document as any).msExitFullscreen();
+                                }
+                                
+                                readerContainer.classList.remove('fullscreen');
+                            }
+                        });
+                        
+                        // Update button when fullscreen state changes
+                        document.addEventListener('fullscreenchange', () => {
+                            if (document.fullscreenElement) {
+                                readerContainer.classList.add('fullscreen');
+                            } else {
+                                readerContainer.classList.remove('fullscreen');
+                            }
+                        });
+                    }
+                    
                     // Ensure viewport stays fixed for mobile devices
                     function lockViewport() {
                         // Force the viewport to stay at the right scale for mobile
@@ -233,13 +337,18 @@ export const getScript = (initialPosition: number) => {
                         // Lock the viewport immediately and repeatedly to ensure mobile rendering
                         lockViewport();
                         
+                        // Initialize font size controls
+                        initializeFontSizeControls();
+                        
+                        // Initialize fullscreen functionality
+                        initializeFullscreen();
+                        
                         // Add more responsive scroll position tracking
                         const readerContent = document.getElementById('reader-content');
                         const progressBar = document.getElementById('progress-bar');
-                        const progressInfo = document.getElementById('progress-info');
                         const progressContainer = document.getElementById('progress-container');
                         const progressHandle = document.getElementById('progress-handle');
-                        const progressTooltip = document.getElementById('progress-tooltip');
+                        const tooltipPosition = document.getElementById('tooltip-position');
                         
                         if (readerContent) {
                             let scrollTimeout;
@@ -265,23 +374,13 @@ export const getScript = (initialPosition: number) => {
                                     progressHandle.style.left = percentage + '%';
                                 }
                                 
-                                // Update tooltip
-                                if (progressTooltip) {
-                                    progressTooltip.textContent = percentage + '%';
+                                // Update tooltip position value
+                                if (tooltipPosition) {
+                                    tooltipPosition.textContent = percentage + '%';
                                 }
                                 
-                                // Update progress info with both chapter and book percentages
+                                // Update chapter and book progress in tooltip
                                 updateProgressInfo(percentage);
-                                
-                                // Show progress info
-                                if (progressInfo) {
-                                    progressInfo.classList.add('active');
-                                    
-                                    // Hide progress info after 2 seconds
-                                    setTimeout(function() {
-                                        progressInfo.classList.remove('active');
-                                    }, 2000);
-                                }
                                 
                                 // Debounce the position change event to avoid too many updates
                                 scrollTimeout = setTimeout(function() {
@@ -290,11 +389,11 @@ export const getScript = (initialPosition: number) => {
                                         detail: { position: percentage }
                                     });
                                     document.dispatchEvent(event);
-                                }, 200); // Reduced from longer delays for more responsive updates
-                            }, { passive: true }); // Use passive event for better performance
+                                }, 200);
+                            }, { passive: true }); 
                         }
                         
-                        // Setup drag functionality for progress bar with enhanced animations
+                        // Setup drag functionality for progress bar
                         if (progressContainer && progressHandle) {
                             let isDragging = false;
                             let animationFrame;
@@ -324,11 +423,6 @@ export const getScript = (initialPosition: number) => {
                                 // Prevent text selection during drag
                                 document.body.style.userSelect = 'none';
                                 
-                                // Show progress info immediately
-                                if (progressInfo) {
-                                    progressInfo.classList.add('active');
-                                }
-                                
                                 e.preventDefault();
                             };
                             
@@ -353,18 +447,13 @@ export const getScript = (initialPosition: number) => {
                                 
                                 // Reset handle transform with a slight delay for bounce effect
                                 setTimeout(() => {
-                                    progressHandle.style.transform = 'translateX(-50%)';
+                                    if (progressHandle) {
+                                        progressHandle.style.transform = 'translateX(-50%)';
+                                    }
                                 }, 100);
                                 
                                 // Re-enable text selection
                                 document.body.style.userSelect = '';
-                                
-                                // Hide progress info after a delay
-                                if (progressInfo) {
-                                    setTimeout(function() {
-                                        progressInfo.classList.remove('active');
-                                    }, 2000);
-                                }
                             };
                             
                             // Function to update progress from mouse/touch event
@@ -393,12 +482,12 @@ export const getScript = (initialPosition: number) => {
                                     progressHandle.style.left = percentage + '%';
                                 }
                                 
-                                // Update tooltip
-                                if (progressTooltip) {
-                                    progressTooltip.textContent = Math.round(percentage) + '%';
+                                // Update tooltip position
+                                if (tooltipPosition) {
+                                    tooltipPosition.textContent = Math.round(percentage) + '%';
                                 }
                                 
-                                // Update progress info with both chapter and book percentages
+                                // Update chapter and book progress in tooltip
                                 updateProgressInfo(percentage);
                                 
                                 // Scroll to position
@@ -423,8 +512,16 @@ export const getScript = (initialPosition: number) => {
                             // Add event listeners for touch events
                             progressContainer.addEventListener('touchstart', startDrag, { passive: false });
                             document.addEventListener('touchmove', moveDrag, { passive: false });
-                            document.addEventListener('touchend', endDrag);
-                            document.addEventListener('touchcancel', endDrag);
+                            document.addEventListener('touchend', endDrag, { passive: true });
+                            document.addEventListener('touchcancel', endDrag, { passive: true });
+                            
+                            // Add additional safety - ensure drag state is reset when user leaves the page or switches apps
+                            window.addEventListener('blur', endDrag, { passive: true });
+                            window.addEventListener('visibilitychange', () => {
+                                if (document.visibilityState !== 'visible') {
+                                    endDrag();
+                                }
+                            }, { passive: true });
                             
                             // Add hover effect for progress bar
                             progressContainer.addEventListener('mouseenter', function() {

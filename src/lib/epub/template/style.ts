@@ -42,13 +42,13 @@ export const readerStyles = `<style>
             }
             
             .litera-reader {
-                --primary-color: #3498db;
+                --primary-color: #34AAED;
                 --secondary-color: #2980b9;
                 --background-color: #0f1117;
                 --text-color: #e6e6e6;
                 --border-color: #333;
-                --progress-bg: rgba(255, 255, 255, 0.1);
-                --progress-fill: rgba(52, 152, 219, 0.8);
+                --progress-bg: rgba(255, 255, 255, 0.15);
+                --progress-fill: rgba(52, 170, 237, 0.9);
                 --sidebar-bg: #161a24;
                 --sidebar-text: #ddd;
                 --highlight-color: #e74c3c;
@@ -69,6 +69,35 @@ export const readerStyles = `<style>
                 /* Ensure the container remains in mobile viewport mode */
                 min-width: unset !important;
                 zoom: 1 !important;
+            }
+            
+            /* Font size classes that can be applied to the reader */
+            .litera-reader.font-size-small .reader-content-inner,
+            .litera-reader.font-size-small .chapter,
+            .litera-reader.font-size-small .chapter p,
+            .litera-reader.font-size-small .chapter div {
+                font-size: 0.9rem !important;
+            }
+            
+            .litera-reader.font-size-medium .reader-content-inner,
+            .litera-reader.font-size-medium .chapter,
+            .litera-reader.font-size-medium .chapter p,
+            .litera-reader.font-size-medium .chapter div {
+                font-size: 1.1rem !important;
+            }
+            
+            .litera-reader.font-size-large .reader-content-inner,
+            .litera-reader.font-size-large .chapter,
+            .litera-reader.font-size-large .chapter p,
+            .litera-reader.font-size-large .chapter div {
+                font-size: 1.3rem !important;
+            }
+            
+            .litera-reader.font-size-x-large .reader-content-inner,
+            .litera-reader.font-size-x-large .chapter,
+            .litera-reader.font-size-x-large .chapter p,
+            .litera-reader.font-size-x-large .chapter div {
+                font-size: 1.5rem !important;
             }
             
             /* Additional rules to prevent layout shifting */
@@ -115,7 +144,7 @@ export const readerStyles = `<style>
             .reader-controls {
                 display: flex;
                 align-items: center;
-                min-width: 44px; /* Ensure minimum width for TOC button */
+                gap: 8px;
             }
 
             .reader-btn {
@@ -138,6 +167,11 @@ export const readerStyles = `<style>
                 padding: 0;
                 margin: 0;
             }
+            
+            .font-size-btn {
+                font-size: 1rem;
+                font-weight: 500;
+            }
 
             .reader-btn:hover {
                 background-color: rgba(255, 255, 255, 0.1);
@@ -145,6 +179,45 @@ export const readerStyles = `<style>
 
             .reader-btn:active {
                 background-color: rgba(255, 255, 255, 0.2);
+            }
+            
+            /* Font size menu */
+            .font-size-menu {
+                position: absolute;
+                top: 60px;
+                right: 100px;
+                background-color: var(--sidebar-bg);
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                padding: 8px;
+                z-index: 1000;
+                display: none;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .font-size-menu.active {
+                display: flex;
+            }
+            
+            .font-size-option {
+                background: none;
+                border: none;
+                color: var(--text-color);
+                padding: 8px 16px;
+                text-align: center;
+                cursor: pointer;
+                border-radius: 4px;
+                transition: background-color 0.2s;
+            }
+            
+            .font-size-option:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            
+            .font-size-option.active {
+                background-color: var(--primary-color);
+                color: white;
             }
 
             /* Content area */
@@ -168,7 +241,7 @@ export const readerStyles = `<style>
             /* Progress bar - Enhanced with extra bounce */
             .reader-progress-container {
                 position: absolute;
-                top: 69px;
+                top: 60px;
                 left: 0;
                 right: 0;
                 height: 6px; /* Even smaller height when not active */
@@ -257,10 +330,10 @@ export const readerStyles = `<style>
             }
             
             .handle-circle {
-                width: 10px; /* Even smaller when inactive */
-                height: 10px;
+                width: 12px; /* Slightly larger circle */
+                height: 12px;
                 border-radius: 50%;
-                background-color: white;
+                background-color: var(--primary-color);
                 box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
                 transition: transform 0.4s var(--bounce-timing), width 0.4s var(--bounce-timing), height 0.4s var(--bounce-timing), background-color 0.3s ease; /* Extra bouncy animation */
             }
@@ -284,11 +357,10 @@ export const readerStyles = `<style>
                 top: 100%;
                 left: 50%;
                 transform: translateX(-50%);
-                background-color: rgba(0, 0, 0, 0.8);
                 color: white;
-                padding: 3px 6px;
-                border-radius: 4px;
-                font-size: 12px;
+                padding: 6px 10px;
+                border-radius: 8px;
+                font-size: 10px;
                 white-space: nowrap;
                 margin-top: 8px;
                 opacity: 0;
@@ -296,6 +368,14 @@ export const readerStyles = `<style>
                 pointer-events: none;
                 font-weight: 500;
                 z-index: 102;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-width: 300px;
+                text-align: center;
+                gap: 2px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
             }
             
             .reader-progress-container:hover .progress-tooltip,
@@ -305,48 +385,34 @@ export const readerStyles = `<style>
                 transform: translateX(-50%) translateY(0);
             }
 
-            /* Progress info - Enhanced for dual percentage display */
-            .reader-progress-info {
-                position: absolute;
-                bottom: 15px;
-                right: 15px;
-                background: rgba(0, 0, 0, 0.8);
-                color: white;
-                padding: 8px 15px;
-                border-radius: 20px;
-                font-size: 0.9rem;
-                opacity: 0;
-                transition: opacity 0.3s, transform 0.4s var(--bounce-timing); /* Extra bouncy animation */
-                transform: translateY(15px);
-                pointer-events: none;
-                z-index: 100;
-                display: flex;
-                flex-direction: column;
-                gap: 5px;
-                min-width: 120px;
+            .tooltip-position {
+                font-size: 1.1em;
+                font-weight: bold;
+                color: var(--primary-color);
+                margin-bottom: 2px;
             }
 
-            .reader-progress-info.active {
-                opacity: 1;
-                transform: translateY(0);
+            .tooltip-chapter {
+                font-size: 0.9em;
+                max-width: 100px;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
-            
-            .progress-info-chapter,
-            .progress-info-book {
+
+            .tooltip-book {
                 display: flex;
-                justify-content: space-between;
+                justify-content: center;
                 align-items: center;
-                white-space: nowrap;
+                gap: 4px;
+                font-size: 0.9em;
             }
-            
-            .progress-info-label {
+
+            .tooltip-label {
                 color: rgba(255, 255, 255, 0.7);
-                font-size: 0.8rem;
-                margin-right: 8px;
             }
-            
-            .progress-info-value {
-                font-weight: 500;
+
+            .tooltip-value {
+                font-weight: bold;
             }
 
             /* Sidebar */
@@ -493,6 +559,19 @@ export const readerStyles = `<style>
                 100% { transform: rotate(360deg); }
             }
 
+            /* Fullscreen mode styles */
+            .litera-reader.fullscreen {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                z-index: 9999 !important;
+                background-color: var(--background-color) !important;
+            }
+
             /* Mobile styles - Tablet */
             @media (max-width: 768px) {
                 body, html {
@@ -610,6 +689,11 @@ export const readerStyles = `<style>
                 .toc-item {
                     padding: 1.2rem 1rem;
                     font-size: 1.2rem;
+                }
+
+                .progress-tooltip {
+                    min-width: 100px;
+                    max-width: 150px;
                 }
             }
             
