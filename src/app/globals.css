@@ -430,3 +430,19 @@ html {
   top: -20px; /* Offset to account for any fixed headers */
   visibility: hidden;
 }
+
+/* Ensure proper font sizing on mobile devices */
+@media (max-width: 768px) {
+  html, body {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  
+  .chapter {
+    font-size: 1.25rem !important;
+  }
+  
+  .litera-reader {
+    font-size: 18px !important;
+  }
+}

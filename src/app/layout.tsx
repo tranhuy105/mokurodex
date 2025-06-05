@@ -1,8 +1,4 @@
 import { QueryClientProviderWrapper } from "@/components/provider/query-client-provider";
-import MobileDebugOverlay from "@/components/pwa/MobileDebugOverlay";
-import OnlineStatusOverlay from "@/components/pwa/OnlineStatusOverlay";
-import { ServiceWorkerRegistration } from "@/components/pwa/ServiceWorkerRegistration";
-import { UpdateNotification } from "@/components/pwa/UpdateNotification";
 import NavbarWrapper from "@/components/ui/NavbarWrapper";
 import Providers from "@/context/Providers";
 import { ThemeProvider } from "next-themes";
@@ -64,11 +60,11 @@ export default function RootLayout({
                             <main>{children}</main>
                             {/* <PWAInstall /> */}
                             <Toaster position="bottom-right" />
-                            <MobileDebugOverlay />
+                            {/* <MobileDebugOverlay /> */}
                             {/* <AnkiConnectDebugOverlay /> */}
-                            <OnlineStatusOverlay />
-                            <ServiceWorkerRegistration />
-                            <UpdateNotification />
+                            {/* <OnlineStatusOverlay /> */}
+                            {/* <ServiceWorkerRegistration /> */}
+                            {/* <UpdateNotification /> */}
                         </Providers>
                     </QueryClientProviderWrapper>
                 </ThemeProvider>
