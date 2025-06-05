@@ -23,6 +23,9 @@ interface SimpleEpubReaderProps {
     initialPosition?: number;
 }
 
+/**
+ * @deprecated Use EpubReader instead
+ */
 export function SimpleEpubReader({
     epubData,
     onPositionChange,

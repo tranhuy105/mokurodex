@@ -1,7 +1,7 @@
 "use client";
 
 import { OfflineManager } from "@/components/pwa/OfflineManager";
-import { SimpleEpubReader } from "@/components/reader/epub/SimpleEpubReader";
+import { EpubReader } from "@/components/reader/epub/EpubReader";
 import { useEpubFileUrl } from "@/hooks/use-content";
 import {
     useLatestReadingHistory,
@@ -154,7 +154,7 @@ export default function EpubReaderContainer({
         };
     }, [currentPosition, saveReadingPosition]);
 
-    // Handle scroll position changes from the SimpleEpubReader
+    // Handle scroll position changes from the EpubReader
     const handlePositionChange = useCallback(
         (position: number) => {
             setCurrentPosition(position);
@@ -191,7 +191,7 @@ export default function EpubReaderContainer({
     return (
         <div className="flex flex-col h-screen">
             <div className="flex-grow">
-                <SimpleEpubReader
+                <EpubReader
                     epubData={epubData}
                     onPositionChange={handlePositionChange}
                     initialPosition={initialPosition}
